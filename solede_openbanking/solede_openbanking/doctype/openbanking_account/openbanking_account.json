@@ -1,0 +1,106 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-01-13 14:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "uuid",
+  "account_id",
+  "iban",
+  "account_name",
+  "provider_name",
+  "provider_country",
+  "nature",
+  "balance",
+  "currency_code",
+  "enabled",
+  "consent_expires_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "uuid",
+   "fieldtype": "Data",
+   "label": "UUID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "account_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Account ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "iban",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "IBAN",
+   "read_only": 1
+  },
+  {
+   "fieldname": "account_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Account Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provider_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Provider Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provider_country",
+   "fieldtype": "Data",
+   "label": "Provider Country",
+   "read_only": 1
+  },
+  {
+   "fieldname": "nature",
+   "fieldtype": "Data",
+   "label": "Nature",
+   "read_only": 1
+  },
+  {
+   "fieldname": "balance",
+   "fieldtype": "Data",
+   "label": "Balance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "currency_code",
+   "fieldtype": "Data",
+   "label": "Currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "read_only": 1
+  },
+  {
+   "fieldname": "consent_expires_at",
+   "fieldtype": "Datetime",
+   "label": "Consent Expires At",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-01-13 14:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Solede Openbanking",
+ "name": "OpenBanking Account",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
