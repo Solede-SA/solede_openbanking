@@ -60,7 +60,11 @@ frappe.ui.form.on("OpenBanking Settings", {
                     // Genera automaticamente il return URL usando l'URL del doctype corrente
                     const return_url = window.location.origin + window.location.pathname;
 
-                    frappe.prompt([
+                    // Verifica se siamo in un sito .local per mostrare l'opzione test
+                    const is_local_site = window.location.hostname.endsWith('.local') ||
+                                         window.location.hostname === 'localhost';
+
+                    let fields = [
                         {
                             fieldname: 'bank_manager_email',
                             fieldtype: 'Data',
@@ -74,14 +78,28 @@ frappe.ui.form.on("OpenBanking Settings", {
                             default: 180,
                             description: __('Number of days for which to grant consent (1-180)')
                         }
-                    ], (values) => {
+                    ];
+
+                    // Aggiungi campo test_mode solo se siamo su .local
+                    if (is_local_site) {
+                        fields.push({
+                            fieldname: 'test_mode',
+                            fieldtype: 'Check',
+                            label: __('Test Mode (Fake Bank)'),
+                            default: 0,
+                            description: __('Use XF country code to connect to a simulated test bank (no real credentials needed)')
+                        });
+                    }
+
+                    frappe.prompt(fields, (values) => {
                         frappe.call({
                             method: "solede_openbanking.api.business_registry.start_connect_request",
                             args: {
                                 company: frm.doc.company,
                                 return_url: return_url,
                                 bank_manager_email: values.bank_manager_email || null,
-                                days: values.days || 180
+                                days: values.days || 180,
+                                test_mode: values.test_mode || 0
                             },
                             freeze: true,
                             freeze_message: __("Creating connect request..."),

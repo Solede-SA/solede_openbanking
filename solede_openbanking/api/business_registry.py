@@ -211,7 +211,7 @@ def get_business_registry_info(company):
 
 
 @frappe.whitelist()
-def start_connect_request(company, return_url=None, bank_manager_email=None, days=180):
+def start_connect_request(company, return_url=None, bank_manager_email=None, days=180, test_mode=0):
     """
     Avvia il processo di connessione bancaria per il Business Registry.
     Restituisce un URL dove l'utente può selezionare la banca e autorizzare l'accesso.
@@ -221,6 +221,7 @@ def start_connect_request(company, return_url=None, bank_manager_email=None, day
         return_url: URL opzionale dove tornare dopo la connessione
         bank_manager_email: Email opzionale del manager che gestisce la connessione
         days: Numero di giorni per il consenso (1-180, default 180)
+        test_mode: Se 1, usa banca fake per test (country code XF)
     """
     # Ottieni le impostazioni
     settings = frappe.get_doc("OpenBanking Settings", company)
@@ -242,10 +243,15 @@ def start_connect_request(company, return_url=None, bank_manager_email=None, day
     # Prepara l'URL per la connect request
     endpoint_url = f"{settings.openbanking_api_url.rstrip('/')}/business-registry/{fiscal_id}/connect"
 
+    # Determina il country code in base al test_mode
+    # XF = Fake bank per test (solo in sandbox)
+    # IT = Banche reali italiane
+    country_code = "XF" if int(test_mode) == 1 else "IT"
+
     # Prepara il payload
     payload = {
         "locale": "it",
-        "country": "IT",
+        "country": country_code,
         "days": int(days)
     }
 
