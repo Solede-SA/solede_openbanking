@@ -431,3 +431,169 @@ def get_accounts(company):
         error_msg = str(e)
         frappe.log_error(f"URL: {endpoint_url}, Error: {error_msg}", "Get Accounts API Error")
         frappe.throw(_("Failed to connect to Business Registry API: {0}").format(error_msg))
+
+
+@frappe.whitelist()
+def toggle_account(company, uuid, enabled):
+    """
+    Abilita o disabilita un account bancario.
+    Disabilitare un account cancella anche il saldo, i dati extra e le transazioni.
+
+    Args:
+        company: Nome della company
+        uuid: UUID dell'account da abilitare/disabilitare
+        enabled: 1 per abilitare, 0 per disabilitare
+    """
+    # Ottieni le impostazioni
+    settings = frappe.get_doc("OpenBanking Settings", company)
+
+    # Verifica che l'Open Banking API URL sia configurato
+    if not settings.openbanking_api_url:
+        frappe.throw(_("Open Banking API URL not configured in settings"))
+
+    # Ottieni un token valido
+    token = get_valid_token(company)
+
+    # Prepara l'URL per l'aggiornamento dell'account
+    endpoint_url = f"{settings.openbanking_api_url.rstrip('/')}/accounts/{uuid}"
+
+    payload = {
+        "enabled": bool(int(enabled))
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}"
+    }
+
+    print("=" * 80)
+    print(f"DEBUG - Toggle Account")
+    print(f"UUID: {uuid}")
+    print(f"Enabled: {enabled}")
+    print(f"Endpoint URL: {endpoint_url}")
+    print(f"Payload: {payload}")
+    print("=" * 80)
+
+    try:
+        # Effettua la richiesta PUT
+        response = requests.put(endpoint_url, json=payload, headers=headers, timeout=30)
+
+        print(f"Response Status Code: {response.status_code}")
+        print(f"Response Body: {response.text}")
+
+        # Verifica lo status code (200 = success)
+        if response.status_code == 200:
+            response_data = response.json()
+
+            # Aggiorna l'account nella child table
+            for account in settings.accounts:
+                if account.uuid == uuid:
+                    account.enabled = int(enabled)
+                    break
+
+            settings.save(ignore_permissions=True)
+            frappe.db.commit()
+
+            action = "enabled" if int(enabled) == 1 else "disabled"
+            return {
+                "success": True,
+                "message": _("Account {0} successfully").format(action),
+                "data": response_data
+            }
+        else:
+            # Gestisci altri status code
+            try:
+                error_data = response.json()
+                detail = error_data.get('detail', 'Unknown error')
+            except:
+                detail = f"HTTP {response.status_code}"
+
+            error_log = f"Status: {response.status_code}, URL: {endpoint_url}, Detail: {detail}"
+            frappe.log_error(error_log, "Toggle Account Error")
+            frappe.throw(_("Failed to toggle account (HTTP {0}): {1}").format(response.status_code, detail))
+
+    except requests.exceptions.RequestException as e:
+        error_msg = str(e)
+        frappe.log_error(f"URL: {endpoint_url}, Error: {error_msg}", "Toggle Account API Error")
+        frappe.throw(_("Failed to connect to API: {0}").format(error_msg))
+
+
+@frappe.whitelist()
+def delete_account(company, uuid):
+    """
+    Elimina un account bancario e tutti gli account associati alla stessa connessione bancaria.
+    Tutti gli account devono essere disabilitati e non avere pagamenti collegati.
+
+    Args:
+        company: Nome della company
+        uuid: UUID dell'account da eliminare
+    """
+    # Ottieni le impostazioni
+    settings = frappe.get_doc("OpenBanking Settings", company)
+
+    # Verifica che l'Open Banking API URL sia configurato
+    if not settings.openbanking_api_url:
+        frappe.throw(_("Open Banking API URL not configured in settings"))
+
+    # Ottieni un token valido
+    token = get_valid_token(company)
+
+    # Prepara l'URL per eliminare l'account
+    endpoint_url = f"{settings.openbanking_api_url.rstrip('/')}/accounts/{uuid}"
+
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    print("=" * 80)
+    print(f"DEBUG - Delete Account")
+    print(f"UUID: {uuid}")
+    print(f"Endpoint URL: {endpoint_url}")
+    print("=" * 80)
+
+    try:
+        # Effettua la richiesta DELETE
+        response = requests.delete(endpoint_url, headers=headers, timeout=30)
+
+        print(f"Response Status Code: {response.status_code}")
+        print(f"Response Body: {response.text}")
+
+        # Verifica lo status code (202 = accepted)
+        if response.status_code == 202:
+            response_data = response.json()
+            removed_accounts = response_data.get("removedAccounts", [])
+
+            # Rimuovi gli account dalla child table
+            accounts_to_keep = []
+            for account in settings.accounts:
+                if account.uuid not in removed_accounts:
+                    accounts_to_keep.append(account)
+
+            settings.accounts = []
+            for account in accounts_to_keep:
+                settings.append("accounts", account.as_dict())
+
+            settings.save(ignore_permissions=True)
+            frappe.db.commit()
+
+            return {
+                "success": True,
+                "message": _("Account deleted successfully. {0} account(s) removed.").format(len(removed_accounts)),
+                "removed_accounts": removed_accounts
+            }
+        else:
+            # Gestisci altri status code
+            try:
+                error_data = response.json()
+                detail = error_data.get('detail', 'Unknown error')
+            except:
+                detail = f"HTTP {response.status_code}"
+
+            error_log = f"Status: {response.status_code}, URL: {endpoint_url}, Detail: {detail}"
+            frappe.log_error(error_log, "Delete Account Error")
+            frappe.throw(_("Failed to delete account (HTTP {0}): {1}").format(response.status_code, detail))
+
+    except requests.exceptions.RequestException as e:
+        error_msg = str(e)
+        frappe.log_error(f"URL: {endpoint_url}, Error: {error_msg}", "Delete Account API Error")
+        frappe.throw(_("Failed to connect to API: {0}").format(error_msg))

@@ -141,6 +141,122 @@ frappe.ui.form.on("OpenBanking Settings", {
                 });
             }
 
+            // Gestione azioni sugli account nella child table
+            frm.fields_dict['accounts'].grid.wrapper.on('click', '.grid-row', function(e) {
+                const row = $(this);
+                const row_index = row.index();
+                const account = frm.doc.accounts[row_index];
+
+                if (!account) return;
+
+                // Aggiungi bottoni solo se non già presenti
+                if (row.find('.account-actions').length === 0) {
+                    const actions_html = `
+                        <div class="account-actions" style="margin-top: 5px;">
+                            ${account.enabled ?
+                                '<button class="btn btn-xs btn-warning btn-disable-account">Disable</button>' :
+                                '<button class="btn btn-xs btn-success btn-enable-account">Enable</button>'
+                            }
+                            <button class="btn btn-xs btn-danger btn-delete-account" ${account.enabled ? 'disabled' : ''}>Delete</button>
+                        </div>
+                    `;
+                    row.find('[data-fieldname="enabled"]').closest('.form-group').append(actions_html);
+                }
+            });
+
+            // Handler per Enable account
+            $(document).on('click', '.btn-enable-account', function(e) {
+                e.stopPropagation();
+                const row = $(this).closest('.grid-row');
+                const row_index = row.index();
+                const account = frm.doc.accounts[row_index];
+
+                frappe.call({
+                    method: "solede_openbanking.api.business_registry.toggle_account",
+                    args: {
+                        company: frm.doc.company,
+                        uuid: account.uuid,
+                        enabled: 1
+                    },
+                    freeze: true,
+                    freeze_message: __("Enabling account..."),
+                    callback: function(r) {
+                        if (r.message && r.message.success) {
+                            frappe.show_alert({
+                                message: r.message.message,
+                                indicator: "green"
+                            }, 3);
+                            frm.reload_doc();
+                        }
+                    }
+                });
+            });
+
+            // Handler per Disable account
+            $(document).on('click', '.btn-disable-account', function(e) {
+                e.stopPropagation();
+                const row = $(this).closest('.grid-row');
+                const row_index = row.index();
+                const account = frm.doc.accounts[row_index];
+
+                frappe.confirm(
+                    __('Disabling this account will clear its balance, extra data, and transactions. Continue?'),
+                    () => {
+                        frappe.call({
+                            method: "solede_openbanking.api.business_registry.toggle_account",
+                            args: {
+                                company: frm.doc.company,
+                                uuid: account.uuid,
+                                enabled: 0
+                            },
+                            freeze: true,
+                            freeze_message: __("Disabling account..."),
+                            callback: function(r) {
+                                if (r.message && r.message.success) {
+                                    frappe.show_alert({
+                                        message: r.message.message,
+                                        indicator: "orange"
+                                    }, 3);
+                                    frm.reload_doc();
+                                }
+                            }
+                        });
+                    }
+                );
+            });
+
+            // Handler per Delete account
+            $(document).on('click', '.btn-delete-account', function(e) {
+                e.stopPropagation();
+                const row = $(this).closest('.grid-row');
+                const row_index = row.index();
+                const account = frm.doc.accounts[row_index];
+
+                frappe.confirm(
+                    __('This will delete the account and all associated accounts from the same bank connection. All accounts must be disabled first. Continue?'),
+                    () => {
+                        frappe.call({
+                            method: "solede_openbanking.api.business_registry.delete_account",
+                            args: {
+                                company: frm.doc.company,
+                                uuid: account.uuid
+                            },
+                            freeze: true,
+                            freeze_message: __("Deleting account..."),
+                            callback: function(r) {
+                                if (r.message && r.message.success) {
+                                    frappe.show_alert({
+                                        message: r.message.message,
+                                        indicator: "red"
+                                    }, 3);
+                                    frm.reload_doc();
+                                }
+                            }
+                        });
+                    }
+                );
+            });
+
             // Bottone per recuperare i dati del Business Registry
             frm.add_custom_button(__("Get Business Registry Info"), () => {
                 frappe.call({
