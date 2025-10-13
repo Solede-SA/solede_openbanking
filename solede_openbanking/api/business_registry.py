@@ -4,8 +4,32 @@
 import frappe
 import requests
 import re
+from datetime import datetime
 from frappe import _
 from solede_openbanking.api.authentication import get_valid_token
+
+
+def parse_iso_datetime(iso_string):
+    """
+    Converte una stringa datetime ISO 8601 (con Z) in formato MySQL.
+
+    Args:
+        iso_string: Stringa in formato ISO 8601 (es. "2026-01-11T14:51:05Z")
+
+    Returns:
+        Stringa in formato MySQL (es. "2026-01-11 14:51:05")
+    """
+    if not iso_string:
+        return None
+
+    try:
+        # Rimuovi la Z e converti in datetime
+        dt = datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
+        # Restituisci nel formato MySQL
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
+    except Exception as e:
+        frappe.log_error(f"Error parsing datetime: {iso_string}, Error: {str(e)}", "DateTime Parse Error")
+        return None
 
 
 def validate_password(password):
@@ -268,6 +292,8 @@ def start_connect_request(company, return_url=None, bank_manager_email=None, day
 
     print("=" * 80)
     print(f"DEBUG - Start Connect Request")
+    print(f"Test Mode: {test_mode}")
+    print(f"Country Code: {country_code}")
     print(f"Endpoint URL: {endpoint_url}")
     print(f"Payload: {payload}")
     print("=" * 80)
@@ -375,7 +401,7 @@ def get_accounts(company):
                     "balance": account.get("balance"),
                     "currency_code": account.get("currencyCode"),
                     "enabled": 1 if account.get("enabled") else 0,
-                    "consent_expires_at": account.get("consentExpiresAt")
+                    "consent_expires_at": parse_iso_datetime(account.get("consentExpiresAt"))
                 })
 
             # Salva il documento
