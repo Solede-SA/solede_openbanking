@@ -155,8 +155,9 @@ def create_business_registry(company, password):
                 detail = f"HTTP {status_code}"
 
             # Log breve per evitare errori di lunghezza
-            error_log = f"Status: {status_code}, URL: {endpoint_url}, Detail: {detail}"
-            frappe.log_error(error_log, "Business Registry Error")
+            error_title = f"Business Registry ({status_code})"
+            error_details = f"URL: {endpoint_url}\nDetail: {detail}"
+            frappe.log_error(error_details, error_title)
 
             # Messaggio utente più chiaro
             frappe.throw(_("Failed to create Business Registry (HTTP {0}): {1}").format(status_code, detail))
@@ -326,8 +327,9 @@ def start_connect_request(company, return_url=None, bank_manager_email=None, day
             except:
                 detail = f"HTTP {response.status_code}"
 
-            error_log = f"Status: {response.status_code}, URL: {endpoint_url}, Detail: {detail}"
-            frappe.log_error(error_log, "Connect Request Error")
+            error_title = f"Connect Request ({response.status_code})"
+            error_details = f"URL: {endpoint_url}\nDetail: {detail}"
+            frappe.log_error(error_details, error_title)
             frappe.throw(_("Failed to create connect request (HTTP {0}): {1}").format(response.status_code, detail))
 
     except requests.exceptions.RequestException as e:
@@ -423,8 +425,9 @@ def get_accounts(company):
             except:
                 detail = f"HTTP {response.status_code}"
 
-            error_log = f"Status: {response.status_code}, URL: {endpoint_url}, Detail: {detail}"
-            frappe.log_error(error_log, "Get Accounts Error")
+            error_title = f"Get Accounts ({response.status_code})"
+            error_details = f"URL: {endpoint_url}\nDetail: {detail}"
+            frappe.log_error(error_details, error_title)
             frappe.throw(_("Failed to retrieve accounts (HTTP {0}): {1}").format(response.status_code, detail))
 
     except requests.exceptions.RequestException as e:
@@ -485,13 +488,13 @@ def toggle_account(company, uuid, enabled):
         if response.status_code == 200:
             response_data = response.json()
 
-            # Aggiorna l'account nella child table
+            # Aggiorna direttamente il campo enabled nella child table usando db.set_value
+            # Questo evita conflitti di concorrenza quando si abilitano/disabilitano più account rapidamente
             for account in settings.accounts:
                 if account.uuid == uuid:
-                    account.enabled = int(enabled)
+                    frappe.db.set_value("OpenBanking Account", account.name, "enabled", int(enabled))
                     break
 
-            settings.save(ignore_permissions=True)
             frappe.db.commit()
 
             action = "enabled" if int(enabled) == 1 else "disabled"
@@ -508,8 +511,9 @@ def toggle_account(company, uuid, enabled):
             except:
                 detail = f"HTTP {response.status_code}"
 
-            error_log = f"Status: {response.status_code}, URL: {endpoint_url}, Detail: {detail}"
-            frappe.log_error(error_log, "Toggle Account Error")
+            error_title = f"Toggle Account ({response.status_code})"
+            error_details = f"URL: {endpoint_url}\nDetail: {detail}"
+            frappe.log_error(error_details, error_title)
             frappe.throw(_("Failed to toggle account (HTTP {0}): {1}").format(response.status_code, detail))
 
     except requests.exceptions.RequestException as e:
@@ -589,8 +593,9 @@ def delete_account(company, uuid):
             except:
                 detail = f"HTTP {response.status_code}"
 
-            error_log = f"Status: {response.status_code}, URL: {endpoint_url}, Detail: {detail}"
-            frappe.log_error(error_log, "Delete Account Error")
+            error_title = f"Delete Account ({response.status_code})"
+            error_details = f"URL: {endpoint_url}\nDetail: {detail}"
+            frappe.log_error(error_details, error_title)
             frappe.throw(_("Failed to delete account (HTTP {0}): {1}").format(response.status_code, detail))
 
     except requests.exceptions.RequestException as e:

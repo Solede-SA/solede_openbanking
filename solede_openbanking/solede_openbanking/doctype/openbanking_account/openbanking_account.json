@@ -80,8 +80,8 @@
   {
    "fieldname": "enabled",
    "fieldtype": "Check",
-   "label": "Enabled",
-   "read_only": 1
+   "in_list_view": 1,
+   "label": "Enabled"
   },
   {
    "fieldname": "consent_expires_at",

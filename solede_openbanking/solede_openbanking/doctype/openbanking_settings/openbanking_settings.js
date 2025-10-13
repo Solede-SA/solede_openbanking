@@ -4,6 +4,25 @@
 frappe.ui.form.on("OpenBanking Settings", {
     refresh(frm) {
         if (!frm.is_new()) {
+            // Nascondi il bottone Delete standard della child table accounts
+            // Prova diversi selettori CSS
+            if (!$('#hide-accounts-delete-btn').length) {
+                $('<style id="hide-accounts-delete-btn">')
+                    .text(`
+                        [data-fieldname="accounts"] .grid-delete-multiple-rows { display: none !important; }
+                        [data-fieldname="accounts"] .btn-open-row { display: none !important; }
+                        [data-fieldname="accounts"] .grid-footer .btn-danger { display: none !important; }
+                    `)
+                    .appendTo('head');
+            }
+
+            // Aggiungi anche un timeout per nascondere dopo il rendering
+            setTimeout(() => {
+                if (frm.fields_dict.accounts && frm.fields_dict.accounts.grid) {
+                    frm.fields_dict.accounts.grid.wrapper.find('.btn-danger').hide();
+                    frm.fields_dict.accounts.grid.wrapper.find('.grid-delete-multiple-rows').hide();
+                }
+            }, 500);
             // Bottone per generare il token
             frm.add_custom_button(__("Generate Token"), () => {
                 frappe.call({
@@ -141,121 +160,151 @@ frappe.ui.form.on("OpenBanking Settings", {
                 });
             }
 
-            // Gestione azioni sugli account nella child table
-            frm.fields_dict['accounts'].grid.wrapper.on('click', '.grid-row', function(e) {
-                const row = $(this);
-                const row_index = row.index();
-                const account = frm.doc.accounts[row_index];
+            // Aggiungi bottoni per gestire gli account selezionati
+            if (frm.doc.accounts && frm.doc.accounts.length > 0) {
+                // Bottone Enable per account selezionati
+                frm.fields_dict.accounts.grid.add_custom_button(__('Enable Selected'), function() {
+                    const selected = frm.fields_dict.accounts.grid.get_selected();
+                    if (selected.length === 0) {
+                        frappe.msgprint(__('Please select at least one account'));
+                        return;
+                    }
 
-                if (!account) return;
+                    // get_selected() restituisce i nomi delle righe, non gli indici
+                    const accounts_to_enable = frm.doc.accounts.filter(acc =>
+                        selected.includes(acc.name) && !acc.enabled
+                    );
 
-                // Aggiungi bottoni solo se non già presenti
-                if (row.find('.account-actions').length === 0) {
-                    const actions_html = `
-                        <div class="account-actions" style="margin-top: 5px;">
-                            ${account.enabled ?
-                                '<button class="btn btn-xs btn-warning btn-disable-account">Disable</button>' :
-                                '<button class="btn btn-xs btn-success btn-enable-account">Enable</button>'
-                            }
-                            <button class="btn btn-xs btn-danger btn-delete-account" ${account.enabled ? 'disabled' : ''}>Delete</button>
-                        </div>
-                    `;
-                    row.find('[data-fieldname="enabled"]').closest('.form-group').append(actions_html);
-                }
-            });
+                    if (accounts_to_enable.length === 0) {
+                        frappe.msgprint(__('All selected accounts are already enabled'));
+                        return;
+                    }
 
-            // Handler per Enable account
-            $(document).on('click', '.btn-enable-account', function(e) {
-                e.stopPropagation();
-                const row = $(this).closest('.grid-row');
-                const row_index = row.index();
-                const account = frm.doc.accounts[row_index];
-
-                frappe.call({
-                    method: "solede_openbanking.api.business_registry.toggle_account",
-                    args: {
-                        company: frm.doc.company,
-                        uuid: account.uuid,
-                        enabled: 1
-                    },
-                    freeze: true,
-                    freeze_message: __("Enabling account..."),
-                    callback: function(r) {
-                        if (r.message && r.message.success) {
-                            frappe.show_alert({
-                                message: r.message.message,
-                                indicator: "green"
-                            }, 3);
-                            frm.reload_doc();
+                    frappe.confirm(
+                        __('Enable {0} selected account(s)?', [accounts_to_enable.length]),
+                        () => {
+                            let completed = 0;
+                            accounts_to_enable.forEach(acc => {
+                                frappe.call({
+                                    method: "solede_openbanking.api.business_registry.toggle_account",
+                                    args: {
+                                        company: frm.doc.company,
+                                        uuid: acc.uuid,
+                                        enabled: 1
+                                    },
+                                    callback: function(r) {
+                                        completed++;
+                                        if (completed === accounts_to_enable.length) {
+                                            frappe.show_alert({
+                                                message: __('Enabled {0} account(s)', [accounts_to_enable.length]),
+                                                indicator: "green"
+                                            }, 3);
+                                            frm.reload_doc();
+                                        }
+                                    }
+                                });
+                            });
                         }
-                    }
+                    );
                 });
-            });
 
-            // Handler per Disable account
-            $(document).on('click', '.btn-disable-account', function(e) {
-                e.stopPropagation();
-                const row = $(this).closest('.grid-row');
-                const row_index = row.index();
-                const account = frm.doc.accounts[row_index];
+                // Bottone Disable per account selezionati
+                frm.fields_dict.accounts.grid.add_custom_button(__('Disable Selected'), function() {
+                    console.log('Disable Selected clicked');
+                    const selected = frm.fields_dict.accounts.grid.get_selected();
+                    console.log('Selected rows:', selected);
 
-                frappe.confirm(
-                    __('Disabling this account will clear its balance, extra data, and transactions. Continue?'),
-                    () => {
-                        frappe.call({
-                            method: "solede_openbanking.api.business_registry.toggle_account",
-                            args: {
-                                company: frm.doc.company,
-                                uuid: account.uuid,
-                                enabled: 0
-                            },
-                            freeze: true,
-                            freeze_message: __("Disabling account..."),
-                            callback: function(r) {
-                                if (r.message && r.message.success) {
-                                    frappe.show_alert({
-                                        message: r.message.message,
-                                        indicator: "orange"
-                                    }, 3);
-                                    frm.reload_doc();
-                                }
-                            }
-                        });
+                    if (selected.length === 0) {
+                        frappe.msgprint(__('Please select at least one account'));
+                        return;
                     }
-                );
-            });
 
-            // Handler per Delete account
-            $(document).on('click', '.btn-delete-account', function(e) {
-                e.stopPropagation();
-                const row = $(this).closest('.grid-row');
-                const row_index = row.index();
-                const account = frm.doc.accounts[row_index];
+                    // get_selected() restituisce i nomi delle righe, non gli indici
+                    const accounts_to_disable = frm.doc.accounts.filter(acc =>
+                        selected.includes(acc.name) && acc.enabled
+                    );
 
-                frappe.confirm(
-                    __('This will delete the account and all associated accounts from the same bank connection. All accounts must be disabled first. Continue?'),
-                    () => {
-                        frappe.call({
-                            method: "solede_openbanking.api.business_registry.delete_account",
-                            args: {
-                                company: frm.doc.company,
-                                uuid: account.uuid
-                            },
-                            freeze: true,
-                            freeze_message: __("Deleting account..."),
-                            callback: function(r) {
-                                if (r.message && r.message.success) {
-                                    frappe.show_alert({
-                                        message: r.message.message,
-                                        indicator: "red"
-                                    }, 3);
-                                    frm.reload_doc();
-                                }
-                            }
-                        });
+                    console.log('Accounts to disable:', accounts_to_disable);
+
+                    if (accounts_to_disable.length === 0) {
+                        frappe.msgprint(__('All selected accounts are already disabled'));
+                        return;
                     }
-                );
-            });
+
+                    frappe.confirm(
+                        __('Disabling will clear balance, extra data, and transactions. Disable {0} selected account(s)?', [accounts_to_disable.length]),
+                        () => {
+                            let completed = 0;
+                            accounts_to_disable.forEach(acc => {
+                                frappe.call({
+                                    method: "solede_openbanking.api.business_registry.toggle_account",
+                                    args: {
+                                        company: frm.doc.company,
+                                        uuid: acc.uuid,
+                                        enabled: 0
+                                    },
+                                    callback: function(r) {
+                                        completed++;
+                                        if (completed === accounts_to_disable.length) {
+                                            frappe.show_alert({
+                                                message: __('Disabled {0} account(s)', [accounts_to_disable.length]),
+                                                indicator: "orange"
+                                            }, 3);
+                                            frm.reload_doc();
+                                        }
+                                    }
+                                });
+                            });
+                        }
+                    );
+                });
+
+                // Bottone Delete per account selezionati (solo se disabilitati)
+                frm.fields_dict.accounts.grid.add_custom_button(__('Delete Selected'), function() {
+                    const selected = frm.fields_dict.accounts.grid.get_selected();
+                    if (selected.length === 0) {
+                        frappe.msgprint(__('Please select at least one account'));
+                        return;
+                    }
+
+                    // get_selected() restituisce i nomi delle righe, non gli indici
+                    const accounts_to_delete = frm.doc.accounts.filter(acc =>
+                        selected.includes(acc.name)
+                    );
+                    const enabled_accounts = accounts_to_delete.filter(acc => acc.enabled);
+
+                    if (enabled_accounts.length > 0) {
+                        frappe.msgprint(__('Cannot delete enabled accounts. Please disable them first.'));
+                        return;
+                    }
+
+                    frappe.confirm(
+                        __('WARNING: This will delete the selected account(s) AND all other accounts from the same bank connection(s).<br><br>All accounts in the same connection must be disabled before deletion.<br><br>Delete {0} selected account(s)?', [accounts_to_delete.length]),
+                        () => {
+                            let completed = 0;
+                            accounts_to_delete.forEach(acc => {
+                                frappe.call({
+                                    method: "solede_openbanking.api.business_registry.delete_account",
+                                    args: {
+                                        company: frm.doc.company,
+                                        uuid: acc.uuid
+                                    },
+                                    callback: function(r) {
+                                        completed++;
+                                        if (completed === accounts_to_delete.length) {
+                                            frappe.show_alert({
+                                                message: __('Deleted {0} account(s)', [accounts_to_delete.length]),
+                                                indicator: "red"
+                                            }, 3);
+                                            frm.reload_doc();
+                                        }
+                                    }
+                                });
+                            });
+                        }
+                    );
+                });
+            }
 
             // Bottone per recuperare i dati del Business Registry
             frm.add_custom_button(__("Get Business Registry Info"), () => {
