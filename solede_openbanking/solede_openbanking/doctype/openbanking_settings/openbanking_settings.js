@@ -8,6 +8,8 @@ frappe.require('/assets/solede_openbanking/js/openbanking_helpers.js', function(
 frappe.ui.form.on("OpenBanking Settings", {
     refresh(frm) {
         if (!frm.is_new()) {
+            // I campi bank_display e balance_display vengono già popolati dal backend
+            // quindi non c'è bisogno di formatter JavaScript per la grid
             // Nascondi il bottone Delete standard della child table accounts
             // Prova diversi selettori CSS
             if (!$('#hide-accounts-delete-btn').length) {

@@ -7,16 +7,10 @@
  "engine": "InnoDB",
  "field_order": [
   "uuid",
-  "account_id",
   "iban",
-  "account_name",
-  "provider_name",
-  "provider_country",
-  "nature",
-  "balance",
-  "currency_code",
+  "bank_display",
+  "balance_display",
   "enabled",
-  "consent_expires_at",
   "raw_data"
  ],
  "fields": [
@@ -24,14 +18,8 @@
    "fieldname": "uuid",
    "fieldtype": "Data",
    "label": "UUID",
-   "read_only": 1
-  },
-  {
-   "fieldname": "account_id",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Account ID",
-   "read_only": 1
+   "read_only": 1,
+   "hidden": 1
   },
   {
    "fieldname": "iban",
@@ -41,42 +29,17 @@
    "read_only": 1
   },
   {
-   "fieldname": "account_name",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Account Name",
-   "read_only": 1
-  },
-  {
-   "fieldname": "provider_name",
+   "fieldname": "bank_display",
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Bank",
    "read_only": 1
   },
   {
-   "fieldname": "provider_country",
-   "fieldtype": "Data",
-   "label": "Provider Country",
-   "read_only": 1
-  },
-  {
-   "fieldname": "nature",
-   "fieldtype": "Data",
-   "label": "Nature",
-   "read_only": 1
-  },
-  {
-   "fieldname": "balance",
+   "fieldname": "balance_display",
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Balance",
-   "read_only": 1
-  },
-  {
-   "fieldname": "currency_code",
-   "fieldtype": "Data",
-   "label": "Currency",
    "read_only": 1
   },
   {
@@ -84,12 +47,6 @@
    "fieldtype": "Check",
    "in_list_view": 1,
    "label": "Enabled"
-  },
-  {
-   "fieldname": "consent_expires_at",
-   "fieldtype": "Datetime",
-   "label": "Consent Expires At",
-   "read_only": 1
   },
   {
    "fieldname": "raw_data",

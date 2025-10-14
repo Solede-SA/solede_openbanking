@@ -9,6 +9,29 @@ from frappe import _
 from solede_openbanking.api.client import ACubeAPIClient
 
 
+def format_currency(amount, currency="EUR"):
+    """
+    Formatta un importo come valuta in formato italiano.
+
+    Args:
+        amount: Importo da formattare (numero o stringa)
+        currency: Codice valuta (default: EUR)
+
+    Returns:
+        Stringa formattata (es. "1.234,56 EUR")
+    """
+    if amount is None:
+        return "N/A"
+
+    try:
+        amount_float = float(amount)
+        # Formato italiano: 1.234,56 €
+        formatted = f"{amount_float:,.2f} {currency}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return formatted
+    except (ValueError, TypeError):
+        return str(amount)
+
+
 def parse_iso_datetime(iso_string):
     """
     Converte una stringa datetime ISO 8601 (con Z) in formato MySQL.
@@ -197,19 +220,14 @@ def get_accounts(company):
         client.settings.accounts = []
 
         # Aggiungi gli account alla child table
+        # Salviamo uuid, iban, enabled, raw_data e i campi display formattati
         for account in accounts_data:
             client.settings.append("accounts", {
                 "uuid": account.get("uuid"),
-                "account_id": account.get("accountId"),
                 "iban": account.get("iban"),
-                "account_name": account.get("name"),
-                "provider_name": account.get("providerName"),
-                "provider_country": account.get("providerCountry"),
-                "nature": account.get("nature"),
-                "balance": account.get("balance"),
-                "currency_code": account.get("currencyCode"),
+                "bank_display": account.get("providerName"),
+                "balance_display": format_currency(account.get("balance"), account.get("currencyCode", "EUR")),
                 "enabled": 1 if account.get("enabled") else 0,
-                "consent_expires_at": parse_iso_datetime(account.get("consentExpiresAt")),
                 "raw_data": json.dumps(account, indent=2)
             })
 

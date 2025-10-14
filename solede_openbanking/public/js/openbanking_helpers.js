@@ -156,13 +156,13 @@ window.OpenBankingHelpers = {
 			html += '<table class="table table-bordered table-sm">';
 			html += `<tr><th style="width: 30%">${__('UUID')}</th><td>${data.uuid || ''}</td></tr>`;
 			html += `<tr><th>${__('Account ID')}</th><td>${data.accountId || ''}</td></tr>`;
-			html += `<tr><th>${__('IBAN')}</th><td>${data.iban || ''}</td></tr>`;
+			html += `<tr><th>${__('IBAN')}</th><td>${account_row.iban || ''}</td></tr>`;
 			html += `<tr><th>${__('Account Name')}</th><td>${data.name || ''}</td></tr>`;
-			html += `<tr><th>${__('Bank')}</th><td>${data.providerName || ''}</td></tr>`;
+			html += `<tr><th>${__('Bank')}</th><td>${account_row.bank_display || ''}</td></tr>`;
 			html += `<tr><th>${__('Country')}</th><td>${data.providerCountry || ''}</td></tr>`;
 			html += `<tr><th>${__('Nature')}</th><td>${data.nature || ''}</td></tr>`;
-			html += `<tr><th>${__('Balance')}</th><td>${data.balance || '0'} ${data.currencyCode || ''}</td></tr>`;
-			html += `<tr><th>${__('Enabled')}</th><td>${data.enabled ? 'Yes' : 'No'}</td></tr>`;
+			html += `<tr><th>${__('Balance')}</th><td><strong>${account_row.balance_display || 'N/A'}</strong></td></tr>`;
+			html += `<tr><th>${__('Enabled')}</th><td>${account_row.enabled ? 'Yes' : 'No'}</td></tr>`;
 			html += `<tr><th>${__('Consent Expires')}</th><td>${data.consentExpiresAt || 'N/A'}</td></tr>`;
 
 			// Altri identificatori
@@ -174,34 +174,12 @@ window.OpenBankingHelpers = {
 
 			html += '</table>';
 
-			// Sezione Extra data
+			// Sezione Extra data (mostrata come JSON formattato, senza parsing specifico)
 			if (data.extra && Object.keys(data.extra).length > 0) {
 				html += '<h5 class="mt-3">' + __('Additional Information') + '</h5>';
-				html += '<table class="table table-bordered table-sm">';
-
-				const extra = data.extra;
-				const displayKeys = {
-					'accountName': 'Account Name',
-					'availableAmount': 'Available Amount',
-					'blockedAmount': 'Blocked Amount',
-					'creditLimit': 'Credit Limit',
-					'openingBalance': 'Opening Balance',
-					'closingBalance': 'Closing Balance',
-					'interestRate': 'Interest Rate',
-					'interestType': 'Interest Type',
-					'status': 'Status',
-					'openDate': 'Open Date',
-					'sortCode': 'Sort Code',
-					'clientName': 'Client Name'
-				};
-
-				for (const [key, label] of Object.entries(displayKeys)) {
-					if (extra[key] !== undefined && extra[key] !== null) {
-						html += `<tr><th style="width: 30%">${__(label)}</th><td>${extra[key]}</td></tr>`;
-					}
-				}
-
-				html += '</table>';
+				html += '<pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;">';
+				html += JSON.stringify(data.extra, null, 2);
+				html += '</pre>';
 			}
 
 			// Sezione Systems
@@ -214,7 +192,7 @@ window.OpenBankingHelpers = {
 
 			// Mostra il modal
 			frappe.msgprint({
-				title: __('Account Details: {0}', [data.providerName || data.accountId]),
+				title: __('Account Details: {0}', [account_row.bank_display || data.accountId]),
 				message: html,
 				indicator: 'blue',
 				wide: true
