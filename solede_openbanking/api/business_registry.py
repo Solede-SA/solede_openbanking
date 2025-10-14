@@ -209,7 +209,8 @@ def get_accounts(company):
                 "balance": account.get("balance"),
                 "currency_code": account.get("currencyCode"),
                 "enabled": 1 if account.get("enabled") else 0,
-                "consent_expires_at": parse_iso_datetime(account.get("consentExpiresAt"))
+                "consent_expires_at": parse_iso_datetime(account.get("consentExpiresAt")),
+                "raw_data": json.dumps(account, indent=2)
             })
 
         # Salva il documento

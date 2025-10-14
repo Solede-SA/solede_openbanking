@@ -16,7 +16,8 @@
   "balance",
   "currency_code",
   "enabled",
-  "consent_expires_at"
+  "consent_expires_at",
+  "raw_data"
  ],
  "fields": [
   {
@@ -50,7 +51,7 @@
    "fieldname": "provider_name",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Provider Name",
+   "label": "Bank",
    "read_only": 1
   },
   {
@@ -68,6 +69,7 @@
   {
    "fieldname": "balance",
    "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "Balance",
    "read_only": 1
   },
@@ -88,6 +90,13 @@
    "fieldtype": "Datetime",
    "label": "Consent Expires At",
    "read_only": 1
+  },
+  {
+   "fieldname": "raw_data",
+   "fieldtype": "Long Text",
+   "label": "Raw Data",
+   "read_only": 1,
+   "hidden": 1
   }
  ],
  "index_web_pages_for_search": 1,

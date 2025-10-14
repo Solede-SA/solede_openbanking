@@ -127,6 +127,105 @@ window.OpenBankingHelpers = {
 	},
 
 	/**
+	 * Trova e mostra dettagli di un account per nome
+	 */
+	show_account_details_by_name: function(frm, account_name) {
+		const account = frm.doc.accounts.find(acc => acc.name === account_name);
+		if (account) {
+			this.show_account_details(account);
+		}
+	},
+
+	/**
+	 * Mostra dettagli completi account in un modal
+	 */
+	show_account_details: function(account_row) {
+		if (!account_row.raw_data) {
+			frappe.msgprint(__('No detailed data available for this account'));
+			return;
+		}
+
+		try {
+			const data = JSON.parse(account_row.raw_data);
+
+			// Costruisci HTML con tutti i dettagli
+			let html = '<div class="account-details">';
+
+			// Sezione principale
+			html += '<h5>' + __('Account Information') + '</h5>';
+			html += '<table class="table table-bordered table-sm">';
+			html += `<tr><th style="width: 30%">${__('UUID')}</th><td>${data.uuid || ''}</td></tr>`;
+			html += `<tr><th>${__('Account ID')}</th><td>${data.accountId || ''}</td></tr>`;
+			html += `<tr><th>${__('IBAN')}</th><td>${data.iban || ''}</td></tr>`;
+			html += `<tr><th>${__('Account Name')}</th><td>${data.name || ''}</td></tr>`;
+			html += `<tr><th>${__('Bank')}</th><td>${data.providerName || ''}</td></tr>`;
+			html += `<tr><th>${__('Country')}</th><td>${data.providerCountry || ''}</td></tr>`;
+			html += `<tr><th>${__('Nature')}</th><td>${data.nature || ''}</td></tr>`;
+			html += `<tr><th>${__('Balance')}</th><td>${data.balance || '0'} ${data.currencyCode || ''}</td></tr>`;
+			html += `<tr><th>${__('Enabled')}</th><td>${data.enabled ? 'Yes' : 'No'}</td></tr>`;
+			html += `<tr><th>${__('Consent Expires')}</th><td>${data.consentExpiresAt || 'N/A'}</td></tr>`;
+
+			// Altri identificatori
+			if (data.bban || data.swift || data.accountNumber) {
+				html += `<tr><th>${__('BBAN')}</th><td>${data.bban || 'N/A'}</td></tr>`;
+				html += `<tr><th>${__('SWIFT')}</th><td>${data.swift || 'N/A'}</td></tr>`;
+				html += `<tr><th>${__('Account Number')}</th><td>${data.accountNumber || 'N/A'}</td></tr>`;
+			}
+
+			html += '</table>';
+
+			// Sezione Extra data
+			if (data.extra && Object.keys(data.extra).length > 0) {
+				html += '<h5 class="mt-3">' + __('Additional Information') + '</h5>';
+				html += '<table class="table table-bordered table-sm">';
+
+				const extra = data.extra;
+				const displayKeys = {
+					'accountName': 'Account Name',
+					'availableAmount': 'Available Amount',
+					'blockedAmount': 'Blocked Amount',
+					'creditLimit': 'Credit Limit',
+					'openingBalance': 'Opening Balance',
+					'closingBalance': 'Closing Balance',
+					'interestRate': 'Interest Rate',
+					'interestType': 'Interest Type',
+					'status': 'Status',
+					'openDate': 'Open Date',
+					'sortCode': 'Sort Code',
+					'clientName': 'Client Name'
+				};
+
+				for (const [key, label] of Object.entries(displayKeys)) {
+					if (extra[key] !== undefined && extra[key] !== null) {
+						html += `<tr><th style="width: 30%">${__(label)}</th><td>${extra[key]}</td></tr>`;
+					}
+				}
+
+				html += '</table>';
+			}
+
+			// Sezione Systems
+			if (data.systems && data.systems.length > 0) {
+				html += '<h5 class="mt-3">' + __('Supported Systems') + '</h5>';
+				html += '<p>' + data.systems.join(', ').toUpperCase() + '</p>';
+			}
+
+			html += '</div>';
+
+			// Mostra il modal
+			frappe.msgprint({
+				title: __('Account Details: {0}', [data.providerName || data.accountId]),
+				message: html,
+				indicator: 'blue',
+				wide: true
+			});
+
+		} catch (e) {
+			frappe.msgprint(__('Error parsing account data: {0}', [e.message]));
+		}
+	},
+
+	/**
 	 * Elimina account selezionati
 	 */
 	delete_selected_accounts: function(frm) {

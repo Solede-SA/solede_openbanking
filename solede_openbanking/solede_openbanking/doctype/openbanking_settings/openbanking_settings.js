@@ -221,6 +221,34 @@ frappe.ui.form.on("OpenBanking Settings", {
 
             // Aggiungi bottoni per gestire gli account selezionati nella grid
             if (frm.doc.accounts && frm.doc.accounts.length > 0) {
+                // Gestisci il click sulla riga per aprire i dettagli
+                frm.fields_dict.accounts.grid.wrapper.off('click', '.grid-row');
+                frm.fields_dict.accounts.grid.wrapper.on('click', '.grid-row', function(e) {
+                    // Non aprire se si clicca sul checkbox
+                    if ($(e.target).is('input[type="checkbox"]') || $(e.target).closest('.grid-row-check').length) {
+                        return;
+                    }
+
+                    e.preventDefault();
+                    e.stopPropagation();
+                    OpenBankingHelpers.show_account_details_by_name(frm, $(this).data('name'));
+                });
+
+                // Bottone per visualizzare dettagli account
+                frm.fields_dict.accounts.grid.add_custom_button(__('View Details'), function() {
+                    const selected = frm.fields_dict.accounts.grid.get_selected();
+                    if (selected.length === 0) {
+                        frappe.msgprint(__('Please select an account to view details'));
+                        return;
+                    }
+                    if (selected.length > 1) {
+                        frappe.msgprint(__('Please select only one account to view details'));
+                        return;
+                    }
+
+                    OpenBankingHelpers.show_account_details_by_name(frm, selected[0]);
+                });
+
                 // Bottone Enable per account selezionati
                 frm.fields_dict.accounts.grid.add_custom_button(__('Enable Selected'), function() {
                     OpenBankingHelpers.enable_selected_accounts(frm);
