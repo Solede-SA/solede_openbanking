@@ -1,0 +1,61 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"i7M_Yj1Mwl\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">OpenBanking</span>\",\"col\":12}},{\"id\":\"Gs1knHSJaw\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bank Reconciliation Tool\",\"col\":3}},{\"id\":\"iMIyNUVdgp\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Movimenti da Riconciliare\",\"col\":3}},{\"id\":\"ISrraaYBNv\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"ytg9OmO2wI\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Transaction Log\",\"col\":3}},{\"id\":\"8SaV5ZBeP_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Openbanking Settings\",\"col\":3}}]",
+ "creation": "2025-10-14 21:47:54.696643",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "income",
+ "idx": 0,
+ "indicator_color": "",
+ "is_hidden": 0,
+ "label": "OpenBanking",
+ "links": [],
+ "modified": "2025-10-14 21:59:25.335872",
+ "modified_by": "Administrator",
+ "module": "Solede Openbanking",
+ "name": "OpenBanking",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 8.0,
+ "shortcuts": [
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Transaction Log",
+   "link_to": "ACube Transaction Log",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Movimenti da Riconciliare",
+   "link_to": "Bank Transaction",
+   "stats_filter": "[[\"Bank Transaction\",\"status\",\"=\",\"Unreconciled\",false]]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Openbanking Settings",
+   "link_to": "OpenBanking Settings",
+   "stats_filter": "[]",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Bank Reconciliation Tool",
+   "link_to": "Bank Reconciliation Tool",
+   "type": "DocType"
+  }
+ ],
+ "title": "OpenBanking"
+}

@@ -245,16 +245,72 @@ app_include_js = "/assets/solede_openbanking/js/openbanking_helpers.js"
 # Fixtures
 # --------
 fixtures = [
-	{"dt": "Custom Field", "filters": [["name", "in", [
-		"Bank Transaction-acube_section",
-		"Bank Transaction-acube_transaction_id",
-		"Bank Transaction-api_source",
-		"Bank Transaction-acube_booking_date",
-		"Bank Transaction-acube_value_date",
-		"Bank Transaction-acube_column_break",
-		"Bank Transaction-acube_status",
-		"Bank Transaction-acube_category",
-		"Bank Transaction-acube_raw_data"
-	]]]}
+    {
+        "dt": "Custom Field",
+        "filters": [
+            [
+                "name",
+                "in",
+                [
+                    "Bank Transaction-acube_section",
+                    "Bank Transaction-acube_transaction_id",
+                    "Bank Transaction-api_source",
+                    "Bank Transaction-acube_booking_date",
+                    "Bank Transaction-acube_value_date",
+                    "Bank Transaction-acube_column_break",
+                    "Bank Transaction-acube_status",
+                    "Bank Transaction-acube_category",
+                    "Bank Transaction-acube_raw_data",
+                ],
+            ]
+        ],
+    },
+    {
+        "dt": "Custom Field",
+        "filters": [
+            [
+                "module",
+                "in",
+                [
+                    "Solede Openbanking",
+                ],
+            ],
+        ],
+    },
+    {
+        "dt": "Print Format",
+        "filters": [
+            [
+                "module",
+                "in",
+                [
+                    "Solede Openbanking",
+                ],
+            ],
+        ],
+    },
+    {
+        "dt": "Property Setter",
+        "filters": [
+            [
+                "module",
+                "in",
+                [
+                    "Solede Openbanking",
+                ],
+            ],
+        ],
+    },
+    {
+        "dt": "Workspace",
+        "filters": [
+            [
+                "module",
+                "in",
+                [
+                    "Solede Openbanking",
+                ],
+            ],
+        ],
+    },
 ]
-
