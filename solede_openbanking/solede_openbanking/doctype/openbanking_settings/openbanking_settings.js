@@ -27,7 +27,53 @@ frappe.ui.form.on("OpenBanking Settings", {
                     frm.fields_dict.accounts.grid.wrapper.find('.grid-delete-multiple-rows').hide();
                 }
             }, 500);
-            // Bottone per generare il token
+            // Bottone primario per importare transazioni (nero)
+            if (frm.doc.business_registry_created) {
+                frm.add_custom_button(__("Import Transactions"), () => {
+                    // Mostra dialog per selezionare periodo
+                    const today = frappe.datetime.get_today();
+                    const last_month = frappe.datetime.add_months(today, -1);
+
+                    frappe.prompt([
+                        {
+                            fieldname: 'from_date',
+                            fieldtype: 'Date',
+                            label: __('From Date'),
+                            default: last_month,
+                            reqd: 1
+                        },
+                        {
+                            fieldname: 'to_date',
+                            fieldtype: 'Date',
+                            label: __('To Date'),
+                            default: today,
+                            reqd: 1
+                        }
+                    ], (values) => {
+                        frappe.call({
+                            method: "solede_openbanking.api.business_registry.import_transactions",
+                            args: {
+                                company: frm.doc.company,
+                                from_date: values.from_date,
+                                to_date: values.to_date
+                            },
+                            freeze: true,
+                            freeze_message: __("Importing transactions..."),
+                            callback: function(r) {
+                                if (r.message && r.message.success) {
+                                    frappe.msgprint({
+                                        title: __('Import Completed'),
+                                        message: r.message.message,
+                                        indicator: 'green'
+                                    });
+                                }
+                            }
+                        });
+                    }, __('Import Transactions'), __('Import'));
+                }).addClass('btn-primary');
+            }
+
+            // Menu dropdown "Actions" con tutte le altre azioni
             frm.add_custom_button(__("Generate Token"), () => {
                 OpenBankingHelpers.call_api(
                     "solede_openbanking.api.authentication.generate_token",
@@ -36,7 +82,7 @@ frappe.ui.form.on("OpenBanking Settings", {
                     (r) => frm.reload_doc(),
                     "Token generated successfully"
                 );
-            });
+            }, __("Actions"));
 
             // Bottone per creare Business Registry (solo se non ancora creato)
             if (!frm.doc.business_registry_created) {
@@ -53,11 +99,11 @@ frappe.ui.form.on("OpenBanking Settings", {
                             );
                         }
                     );
-                });
+                }, __("Actions"));
             }
 
-            // Bottone per avviare la connessione bancaria
             if (frm.doc.business_registry_created) {
+                // Bottone per avviare la connessione bancaria
                 frm.add_custom_button(__("Connect Bank Account"), () => {
                     // Genera automaticamente il return URL usando l'URL del doctype corrente
                     const return_url = window.location.origin + window.location.pathname;
@@ -119,7 +165,7 @@ frappe.ui.form.on("OpenBanking Settings", {
                             }
                         });
                     }, __('Connect Bank Account'), __('Connect'));
-                });
+                }, __("Actions"));
 
                 // Bottone per recuperare gli account autorizzati
                 frm.add_custom_button(__("Refresh Accounts"), () => {
@@ -129,54 +175,51 @@ frappe.ui.form.on("OpenBanking Settings", {
                         "Retrieving accounts...",
                         (r) => frm.reload_doc()
                     );
-                });
+                }, __("Actions"));
 
-                // Bottone per importare transazioni
-                frm.add_custom_button(__("Import Transactions"), () => {
-                    // Mostra dialog per selezionare periodo
-                    const today = frappe.datetime.get_today();
-                    const last_month = frappe.datetime.add_months(today, -1);
-
-                    frappe.prompt([
-                        {
-                            fieldname: 'from_date',
-                            fieldtype: 'Date',
-                            label: __('From Date'),
-                            default: last_month,
-                            reqd: 1
+                // Bottone per recuperare i dati del Business Registry
+                frm.add_custom_button(__("Get Business Registry Info"), () => {
+                    frappe.call({
+                        method: "solede_openbanking.api.business_registry.get_business_registry_info",
+                        args: {
+                            company: frm.doc.company
                         },
-                        {
-                            fieldname: 'to_date',
-                            fieldtype: 'Date',
-                            label: __('To Date'),
-                            default: today,
-                            reqd: 1
-                        }
-                    ], (values) => {
-                        frappe.call({
-                            method: "solede_openbanking.api.business_registry.import_transactions",
-                            args: {
-                                company: frm.doc.company,
-                                from_date: values.from_date,
-                                to_date: values.to_date
-                            },
-                            freeze: true,
-                            freeze_message: __("Importing transactions..."),
-                            callback: function(r) {
-                                if (r.message && r.message.success) {
-                                    frappe.msgprint({
-                                        title: __('Import Completed'),
-                                        message: r.message.message,
-                                        indicator: 'green'
-                                    });
+                        freeze: true,
+                        freeze_message: __("Retrieving Business Registry info..."),
+                        callback: function(r) {
+                            if (r.message && r.message.success) {
+                                // Mostra i dati in un dialog
+                                let data = r.message.data;
+                                let html = `
+                                    <table class="table table-bordered">
+                                        <tr><th>Fiscal ID</th><td>${data.fiscalId || ''}</td></tr>
+                                        <tr><th>Business Name</th><td>${data.businessName || ''}</td></tr>
+                                        <tr><th>Email</th><td>${data.email || ''}</td></tr>
+                                        <tr><th>Enabled</th><td>${data.enabled ? 'Yes' : 'No'}</td></tr>
+                                        <tr><th>Email Alerts</th><td>${data.emailAlerts ? 'Yes' : 'No'}</td></tr>
+                                        <tr><th>Locale</th><td>${data.locale || ''}</td></tr>
+                                        <tr><th>Country</th><td>${data.country || ''}</td></tr>
+                                        <tr><th>Sub Account ID</th><td>${data.subAccountId || 'N/A'}</td></tr>
+                                    </table>
+                                `;
+                                frappe.msgprint({
+                                    title: __('Business Registry Information'),
+                                    message: html,
+                                    indicator: 'blue'
+                                });
+
+                                // Aggiorna il flag se il Business Registry esiste
+                                if (!frm.doc.business_registry_created) {
+                                    frm.set_value('business_registry_created', 1);
+                                    frm.save();
                                 }
                             }
-                        });
-                    }, __('Import Transactions'), __('Import'));
-                });
+                        }
+                    });
+                }, __("Actions"));
             }
 
-            // Aggiungi bottoni per gestire gli account selezionati
+            // Aggiungi bottoni per gestire gli account selezionati nella grid
             if (frm.doc.accounts && frm.doc.accounts.length > 0) {
                 // Bottone Enable per account selezionati
                 frm.fields_dict.accounts.grid.add_custom_button(__('Enable Selected'), function() {
@@ -193,47 +236,6 @@ frappe.ui.form.on("OpenBanking Settings", {
                     OpenBankingHelpers.delete_selected_accounts(frm);
                 });
             }
-
-            // Bottone per recuperare i dati del Business Registry
-            frm.add_custom_button(__("Get Business Registry Info"), () => {
-                frappe.call({
-                    method: "solede_openbanking.api.business_registry.get_business_registry_info",
-                    args: {
-                        company: frm.doc.company
-                    },
-                    freeze: true,
-                    freeze_message: __("Retrieving Business Registry info..."),
-                    callback: function(r) {
-                        if (r.message && r.message.success) {
-                            // Mostra i dati in un dialog
-                            let data = r.message.data;
-                            let html = `
-                                <table class="table table-bordered">
-                                    <tr><th>Fiscal ID</th><td>${data.fiscalId || ''}</td></tr>
-                                    <tr><th>Business Name</th><td>${data.businessName || ''}</td></tr>
-                                    <tr><th>Email</th><td>${data.email || ''}</td></tr>
-                                    <tr><th>Enabled</th><td>${data.enabled ? 'Yes' : 'No'}</td></tr>
-                                    <tr><th>Email Alerts</th><td>${data.emailAlerts ? 'Yes' : 'No'}</td></tr>
-                                    <tr><th>Locale</th><td>${data.locale || ''}</td></tr>
-                                    <tr><th>Country</th><td>${data.country || ''}</td></tr>
-                                    <tr><th>Sub Account ID</th><td>${data.subAccountId || 'N/A'}</td></tr>
-                                </table>
-                            `;
-                            frappe.msgprint({
-                                title: __('Business Registry Information'),
-                                message: html,
-                                indicator: 'blue'
-                            });
-
-                            // Aggiorna il flag se il Business Registry esiste
-                            if (!frm.doc.business_registry_created) {
-                                frm.set_value('business_registry_created', 1);
-                                frm.save();
-                            }
-                        }
-                    }
-                });
-            });
         }
     }
 });
