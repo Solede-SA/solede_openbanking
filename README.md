@@ -473,8 +473,9 @@ Per problemi, domande o richieste di funzionalità:
 
 - [Documentazione Frappe](https://frappeframework.com/docs)
 - [Documentazione ERPNext](https://docs.erpnext.com/)
-- [ACube API Documentation](https://acubeapi.com/docs)
-- [PSD2 Open Banking Standard](https://www.europeanpaymentscouncil.eu/what-we-do/psd2)
+- [ACube Open Banking Documentation](https://docs.acubeapi.com/documentation/open-banking/)
+- [PSD2 Directive - European Central Bank](https://www.ecb.europa.eu/press/intro/mip-online/2018/html/1803_revisedpsd.en.html)
+- [Open Banking Standards (UK)](https://standards.openbanking.org.uk/)
 
 ---
 
