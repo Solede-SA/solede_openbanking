@@ -1,7 +1,7 @@
 {
  "charts": [],
- "content": "[{\"id\":\"i7M_Yj1Mwl\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">OpenBanking</span>\",\"col\":12}},{\"id\":\"Gs1knHSJaw\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bank Reconciliation Tool\",\"col\":3}},{\"id\":\"iMIyNUVdgp\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Movimenti da Riconciliare\",\"col\":3}},{\"id\":\"ISrraaYBNv\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"ytg9OmO2wI\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Transaction Log\",\"col\":3}},{\"id\":\"8SaV5ZBeP_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Openbanking Settings\",\"col\":3}}]",
- "creation": "2025-10-14 21:47:54.696643",
+ "content": "[{\"id\":\"i7M_Yj1Mwl\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">OpenBanking</span>\",\"col\":12}},{\"id\":\"Gs1knHSJaw\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bank Reconciliation Tool\",\"col\":3}},{\"id\":\"iMIyNUVdgp\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Movimenti da Riconciliare\",\"col\":3}},{\"id\":\"JbO6RckaIY\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Authorized Bank Accounts\",\"col\":3}},{\"id\":\"ISrraaYBNv\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"ytg9OmO2wI\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Transaction Log\",\"col\":3}},{\"id\":\"8SaV5ZBeP_\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Openbanking Settings\",\"col\":3}}]",
+ "creation": "2025-10-14 22:34:59.707581",
  "custom_blocks": [],
  "docstatus": 0,
  "doctype": "Workspace",
@@ -13,7 +13,7 @@
  "is_hidden": 0,
  "label": "OpenBanking",
  "links": [],
- "modified": "2025-10-14 21:59:25.335872",
+ "modified": "2025-10-14 22:37:42.547978",
  "modified_by": "Administrator",
  "module": "Solede Openbanking",
  "name": "OpenBanking",
@@ -32,6 +32,14 @@
    "link_to": "ACube Transaction Log",
    "stats_filter": "[]",
    "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Authorized Bank Accounts",
+   "link_to": "Authorized Bank Accounts",
+   "report_ref_doctype": "OpenBanking Settings",
+   "type": "Report"
   },
   {
    "color": "Grey",
