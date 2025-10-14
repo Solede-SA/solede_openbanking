@@ -1,6 +1,10 @@
 // Copyright (c) 2025, Solede and contributors
 // For license information, please see license.txt
 
+frappe.require('/assets/solede_openbanking/js/openbanking_helpers.js', function() {
+    // Helper loaded
+});
+
 frappe.ui.form.on("OpenBanking Settings", {
     refresh(frm) {
         if (!frm.is_new()) {
@@ -25,23 +29,13 @@ frappe.ui.form.on("OpenBanking Settings", {
             }, 500);
             // Bottone per generare il token
             frm.add_custom_button(__("Generate Token"), () => {
-                frappe.call({
-                    method: "solede_openbanking.api.authentication.generate_token",
-                    args: {
-                        company: frm.doc.company
-                    },
-                    freeze: true,
-                    freeze_message: __("Generating authentication token..."),
-                    callback: function(r) {
-                        if (r.message && r.message.success) {
-                            frappe.show_alert({
-                                message: __("Token generated successfully"),
-                                indicator: "green"
-                            }, 5);
-                            frm.reload_doc();
-                        }
-                    }
-                });
+                OpenBankingHelpers.call_api(
+                    "solede_openbanking.api.authentication.generate_token",
+                    { company: frm.doc.company },
+                    "Generating authentication token...",
+                    (r) => frm.reload_doc(),
+                    "Token generated successfully"
+                );
             });
 
             // Bottone per creare Business Registry (solo se non ancora creato)
@@ -50,24 +44,13 @@ frappe.ui.form.on("OpenBanking Settings", {
                     frappe.confirm(
                         __('Creating a Business Registry will incur a fee. Do you want to continue?'),
                         () => {
-                            frappe.call({
-                                method: "solede_openbanking.api.business_registry.create_business_registry",
-                                args: {
-                                    company: frm.doc.company,
-                                    password: "" // Non più usata
-                                },
-                                freeze: true,
-                                freeze_message: __("Creating Business Registry..."),
-                                callback: function(r) {
-                                    if (r.message && r.message.success) {
-                                        frappe.show_alert({
-                                            message: __("Business Registry created successfully"),
-                                            indicator: "green"
-                                        }, 5);
-                                        frm.reload_doc();
-                                    }
-                                }
-                            });
+                            OpenBankingHelpers.call_api(
+                                "solede_openbanking.api.business_registry.create_business_registry",
+                                { company: frm.doc.company, password: "" },
+                                "Creating Business Registry...",
+                                (r) => frm.reload_doc(),
+                                "Business Registry created successfully"
+                            );
                         }
                     );
                 });
@@ -140,23 +123,12 @@ frappe.ui.form.on("OpenBanking Settings", {
 
                 // Bottone per recuperare gli account autorizzati
                 frm.add_custom_button(__("Refresh Accounts"), () => {
-                    frappe.call({
-                        method: "solede_openbanking.api.business_registry.get_accounts",
-                        args: {
-                            company: frm.doc.company
-                        },
-                        freeze: true,
-                        freeze_message: __("Retrieving accounts..."),
-                        callback: function(r) {
-                            if (r.message && r.message.success) {
-                                frappe.show_alert({
-                                    message: r.message.message,
-                                    indicator: "green"
-                                }, 5);
-                                frm.reload_doc();
-                            }
-                        }
-                    });
+                    OpenBankingHelpers.call_api(
+                        "solede_openbanking.api.business_registry.get_accounts",
+                        { company: frm.doc.company },
+                        "Retrieving accounts...",
+                        (r) => frm.reload_doc()
+                    );
                 });
 
                 // Bottone per importare transazioni
@@ -208,145 +180,17 @@ frappe.ui.form.on("OpenBanking Settings", {
             if (frm.doc.accounts && frm.doc.accounts.length > 0) {
                 // Bottone Enable per account selezionati
                 frm.fields_dict.accounts.grid.add_custom_button(__('Enable Selected'), function() {
-                    const selected = frm.fields_dict.accounts.grid.get_selected();
-                    if (selected.length === 0) {
-                        frappe.msgprint(__('Please select at least one account'));
-                        return;
-                    }
-
-                    // get_selected() restituisce i nomi delle righe, non gli indici
-                    const accounts_to_enable = frm.doc.accounts.filter(acc =>
-                        selected.includes(acc.name) && !acc.enabled
-                    );
-
-                    if (accounts_to_enable.length === 0) {
-                        frappe.msgprint(__('All selected accounts are already enabled'));
-                        return;
-                    }
-
-                    frappe.confirm(
-                        __('Enable {0} selected account(s)?', [accounts_to_enable.length]),
-                        () => {
-                            let completed = 0;
-                            accounts_to_enable.forEach(acc => {
-                                frappe.call({
-                                    method: "solede_openbanking.api.business_registry.toggle_account",
-                                    args: {
-                                        company: frm.doc.company,
-                                        uuid: acc.uuid,
-                                        enabled: 1
-                                    },
-                                    callback: function(r) {
-                                        completed++;
-                                        if (completed === accounts_to_enable.length) {
-                                            frappe.show_alert({
-                                                message: __('Enabled {0} account(s)', [accounts_to_enable.length]),
-                                                indicator: "green"
-                                            }, 3);
-                                            frm.reload_doc();
-                                        }
-                                    }
-                                });
-                            });
-                        }
-                    );
+                    OpenBankingHelpers.enable_selected_accounts(frm);
                 });
 
                 // Bottone Disable per account selezionati
                 frm.fields_dict.accounts.grid.add_custom_button(__('Disable Selected'), function() {
-                    console.log('Disable Selected clicked');
-                    const selected = frm.fields_dict.accounts.grid.get_selected();
-                    console.log('Selected rows:', selected);
-
-                    if (selected.length === 0) {
-                        frappe.msgprint(__('Please select at least one account'));
-                        return;
-                    }
-
-                    // get_selected() restituisce i nomi delle righe, non gli indici
-                    const accounts_to_disable = frm.doc.accounts.filter(acc =>
-                        selected.includes(acc.name) && acc.enabled
-                    );
-
-                    console.log('Accounts to disable:', accounts_to_disable);
-
-                    if (accounts_to_disable.length === 0) {
-                        frappe.msgprint(__('All selected accounts are already disabled'));
-                        return;
-                    }
-
-                    frappe.confirm(
-                        __('Disabling will clear balance, extra data, and transactions. Disable {0} selected account(s)?', [accounts_to_disable.length]),
-                        () => {
-                            let completed = 0;
-                            accounts_to_disable.forEach(acc => {
-                                frappe.call({
-                                    method: "solede_openbanking.api.business_registry.toggle_account",
-                                    args: {
-                                        company: frm.doc.company,
-                                        uuid: acc.uuid,
-                                        enabled: 0
-                                    },
-                                    callback: function(r) {
-                                        completed++;
-                                        if (completed === accounts_to_disable.length) {
-                                            frappe.show_alert({
-                                                message: __('Disabled {0} account(s)', [accounts_to_disable.length]),
-                                                indicator: "orange"
-                                            }, 3);
-                                            frm.reload_doc();
-                                        }
-                                    }
-                                });
-                            });
-                        }
-                    );
+                    OpenBankingHelpers.disable_selected_accounts(frm);
                 });
 
                 // Bottone Delete per account selezionati (solo se disabilitati)
                 frm.fields_dict.accounts.grid.add_custom_button(__('Delete Selected'), function() {
-                    const selected = frm.fields_dict.accounts.grid.get_selected();
-                    if (selected.length === 0) {
-                        frappe.msgprint(__('Please select at least one account'));
-                        return;
-                    }
-
-                    // get_selected() restituisce i nomi delle righe, non gli indici
-                    const accounts_to_delete = frm.doc.accounts.filter(acc =>
-                        selected.includes(acc.name)
-                    );
-                    const enabled_accounts = accounts_to_delete.filter(acc => acc.enabled);
-
-                    if (enabled_accounts.length > 0) {
-                        frappe.msgprint(__('Cannot delete enabled accounts. Please disable them first.'));
-                        return;
-                    }
-
-                    frappe.confirm(
-                        __('WARNING: This will delete the selected account(s) AND all other accounts from the same bank connection(s).<br><br>All accounts in the same connection must be disabled before deletion.<br><br>Delete {0} selected account(s)?', [accounts_to_delete.length]),
-                        () => {
-                            let completed = 0;
-                            accounts_to_delete.forEach(acc => {
-                                frappe.call({
-                                    method: "solede_openbanking.api.business_registry.delete_account",
-                                    args: {
-                                        company: frm.doc.company,
-                                        uuid: acc.uuid
-                                    },
-                                    callback: function(r) {
-                                        completed++;
-                                        if (completed === accounts_to_delete.length) {
-                                            frappe.show_alert({
-                                                message: __('Deleted {0} account(s)', [accounts_to_delete.length]),
-                                                indicator: "red"
-                                            }, 3);
-                                            frm.reload_doc();
-                                        }
-                                    }
-                                });
-                            });
-                        }
-                    );
+                    OpenBankingHelpers.delete_selected_accounts(frm);
                 });
             }
 

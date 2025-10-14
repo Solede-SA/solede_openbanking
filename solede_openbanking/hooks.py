@@ -26,7 +26,7 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/solede_openbanking/css/solede_openbanking.css"
-# app_include_js = "/assets/solede_openbanking/js/solede_openbanking.js"
+app_include_js = "/assets/solede_openbanking/js/openbanking_helpers.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/solede_openbanking/css/solede_openbanking.css"
