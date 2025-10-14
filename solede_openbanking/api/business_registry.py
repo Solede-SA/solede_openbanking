@@ -717,3 +717,279 @@ def get_transactions(company, account_uuid=None, from_date=None, to_date=None, p
 		error_msg = str(e)
 		frappe.log_error(f"URL: {endpoint_url}, Error: {error_msg}", "Get Transactions API Error")
 		frappe.throw(_("Failed to connect to API: {0}").format(error_msg))
+
+
+def parse_date(date_string):
+	"""
+	Converte una stringa data in formato MySQL date.
+
+	Args:
+		date_string: Stringa data (formato YYYY-MM-DD o ISO)
+
+	Returns:
+		Stringa in formato YYYY-MM-DD o None
+	"""
+	if not date_string:
+		return None
+
+	try:
+		# Se è già in formato YYYY-MM-DD
+		if len(date_string) == 10:
+			return date_string
+		# Se è ISO datetime, prendi solo la data
+		dt = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+		return dt.strftime('%Y-%m-%d')
+	except Exception as e:
+		frappe.log_error(f"Error parsing date: {date_string}, Error: {str(e)}", "Date Parse Error")
+		return None
+
+
+@frappe.whitelist()
+def import_transactions(company, account_uuid=None, from_date=None, to_date=None):
+	"""
+	Importa le transazioni da ACube API in Bank Transaction.
+	Crea anche log entries in ACube Transaction Log.
+
+	Args:
+		company: Nome della company
+		account_uuid: UUID account specifico (opzionale)
+		from_date: Data inizio (formato YYYY-MM-DD)
+		to_date: Data fine (formato YYYY-MM-DD)
+
+	Returns:
+		dict: {
+			"success": True,
+			"imported": count,
+			"skipped": count,
+			"failed": count,
+			"message": "..."
+		}
+	"""
+	imported_count = 0
+	skipped_count = 0
+	failed_count = 0
+
+	# Ottieni le impostazioni
+	settings = frappe.get_doc("OpenBanking Settings", company)
+
+	# Se non specificato account_uuid, prendi tutti gli account abilitati
+	account_uuids = []
+	if account_uuid:
+		account_uuids = [account_uuid]
+	else:
+		# Prendi tutti gli account abilitati
+		for account in settings.accounts:
+			if account.enabled:
+				account_uuids.append(account.uuid)
+
+	if not account_uuids:
+		frappe.throw(_("No enabled accounts found. Please enable at least one account."))
+
+	print(f"DEBUG - Importing transactions for {len(account_uuids)} account(s)")
+
+	# Per ogni account, recupera e importa le transazioni
+	for acc_uuid in account_uuids:
+		try:
+			# Recupera transazioni per questo account
+			result = get_transactions(
+				company=company,
+				account_uuid=acc_uuid,
+				from_date=from_date,
+				to_date=to_date,
+				page=1,
+				items_per_page=100
+			)
+
+			if not result.get("success"):
+				failed_count += len(account_uuids)
+				continue
+
+			transactions = result.get("transactions", [])
+			print(f"DEBUG - Found {len(transactions)} transactions for account {acc_uuid}")
+
+			# Trova l'account nella child table per ottenere info
+			account_info = None
+			for acc in settings.accounts:
+				if acc.uuid == acc_uuid:
+					account_info = acc
+					break
+
+			if not account_info:
+				print(f"WARNING - Account {acc_uuid} not found in settings")
+				continue
+
+			# Trova il Bank Account ERPNext corrispondente all'IBAN
+			bank_account = None
+			if account_info.iban:
+				bank_account = frappe.db.get_value(
+					"Bank Account",
+					{"iban": account_info.iban, "company": company},
+					"name"
+				)
+
+			if not bank_account:
+				print(f"WARNING - No Bank Account found for IBAN {account_info.iban}")
+				# Prova a trovare un bank account generico per la company
+				bank_account = frappe.db.get_value(
+					"Bank Account",
+					{"company": company, "is_default": 1},
+					"name"
+				)
+
+			# Importa ogni transazione
+			for txn in transactions:
+				try:
+					# Log della transazione
+					log_entry = create_transaction_log(
+						company=company,
+						account_uuid=acc_uuid,
+						transaction_data=txn,
+						bank_account=bank_account
+					)
+
+					# Controlla se esiste già
+					existing = frappe.db.exists(
+						"Bank Transaction",
+						{"acube_transaction_id": txn.get("transactionId")}
+					)
+
+					if existing:
+						print(f"DEBUG - Transaction {txn.get('transactionId')} already exists, skipping")
+						frappe.db.set_value("ACube Transaction Log", log_entry.name, "import_status", "Skipped")
+						frappe.db.set_value("ACube Transaction Log", log_entry.name, "error_message", "Transaction already imported")
+						skipped_count += 1
+						continue
+
+					# Crea Bank Transaction
+					bank_txn = create_bank_transaction_from_acube(
+						company=company,
+						bank_account=bank_account,
+						account_info=account_info,
+						transaction_data=txn
+					)
+
+					# Aggiorna log con successo
+					frappe.db.set_value("ACube Transaction Log", log_entry.name, "import_status", "Imported")
+					frappe.db.set_value("ACube Transaction Log", log_entry.name, "bank_transaction", bank_txn.name)
+
+					imported_count += 1
+					print(f"DEBUG - Imported transaction {bank_txn.name}")
+
+				except Exception as e:
+					error_msg = str(e)
+					print(f"ERROR - Failed to import transaction: {error_msg}")
+					frappe.log_error(f"Transaction: {txn}, Error: {error_msg}", "Import Transaction Error")
+
+					# Aggiorna log con errore
+					if log_entry:
+						frappe.db.set_value("ACube Transaction Log", log_entry.name, "import_status", "Failed")
+						frappe.db.set_value("ACube Transaction Log", log_entry.name, "error_message", error_msg[:500])
+
+					failed_count += 1
+					continue
+
+		except Exception as e:
+			error_msg = str(e)
+			print(f"ERROR - Failed to process account {acc_uuid}: {error_msg}")
+			frappe.log_error(f"Account: {acc_uuid}, Error: {error_msg}", "Import Account Error")
+			failed_count += 1
+			continue
+
+	frappe.db.commit()
+
+	message = _("Import completed: {0} imported, {1} skipped, {2} failed").format(
+		imported_count, skipped_count, failed_count
+	)
+
+	return {
+		"success": True,
+		"imported": imported_count,
+		"skipped": skipped_count,
+		"failed": failed_count,
+		"message": message
+	}
+
+
+def create_transaction_log(company, account_uuid, transaction_data, bank_account=None):
+	"""
+	Crea un log entry per la transazione.
+
+	Args:
+		company: Company
+		account_uuid: UUID account ACube
+		transaction_data: Dati transazione da API
+		bank_account: Bank Account ERPNext (opzionale)
+
+	Returns:
+		ACube Transaction Log document
+	"""
+	log = frappe.get_doc({
+		"doctype": "ACube Transaction Log",
+		"company": company,
+		"bank_account": bank_account,
+		"acube_account_uuid": account_uuid,
+		"transaction_date": parse_date(transaction_data.get("madeOn")),
+		"acube_transaction_id": transaction_data.get("transactionId"),
+		"transaction_status": transaction_data.get("status"),
+		"amount": abs(float(transaction_data.get("amount", 0))),
+		"currency": transaction_data.get("currencyCode"),
+		"import_status": "Pending",
+		"raw_data": transaction_data
+	})
+	log.insert(ignore_permissions=True)
+	return log
+
+
+def create_bank_transaction_from_acube(company, bank_account, account_info, transaction_data):
+	"""
+	Crea un Bank Transaction da dati ACube.
+
+	Args:
+		company: Company
+		bank_account: Bank Account ERPNext
+		account_info: Info account dalla child table
+		transaction_data: Dati transazione da API
+
+	Returns:
+		Bank Transaction document
+	"""
+	amount = float(transaction_data.get("amount", 0))
+
+	# Determina deposit/withdrawal
+	deposit = amount if amount > 0 else 0
+	withdrawal = abs(amount) if amount < 0 else 0
+
+	# Crea Bank Transaction
+	bank_txn = frappe.get_doc({
+		"doctype": "Bank Transaction",
+		"date": parse_date(transaction_data.get("madeOn")),
+		"status": "Pending",
+		"bank_account": bank_account,
+		"company": company,
+		"deposit": deposit,
+		"withdrawal": withdrawal,
+		"currency": transaction_data.get("currencyCode"),
+		"description": transaction_data.get("description", "")[:140],
+		"reference_number": transaction_data.get("transactionId"),
+		"transaction_id": transaction_data.get("transactionId"),
+		# Custom fields ACube
+		"acube_transaction_id": transaction_data.get("transactionId"),
+		"api_source": "ACube",
+		"acube_booking_date": parse_date(transaction_data.get("madeOn")),
+		"acube_value_date": parse_date(transaction_data.get("madeOn")),
+		"acube_status": transaction_data.get("status"),
+		"acube_category": transaction_data.get("category"),
+		"acube_raw_data": transaction_data
+	})
+
+	# Prova a estrarre info controparte dal campo extra
+	extra = transaction_data.get("extra", {})
+	if extra:
+		# Cerca payer o payee
+		if extra.get("payer"):
+			bank_txn.bank_party_name = extra.get("payer")[:140]
+		elif extra.get("payee"):
+			bank_txn.bank_party_name = extra.get("payee")[:140]
+
+	bank_txn.insert(ignore_permissions=True)
+	return bank_txn

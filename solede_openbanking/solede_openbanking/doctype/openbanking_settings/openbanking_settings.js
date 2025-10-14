@@ -158,6 +158,50 @@ frappe.ui.form.on("OpenBanking Settings", {
                         }
                     });
                 });
+
+                // Bottone per importare transazioni
+                frm.add_custom_button(__("Import Transactions"), () => {
+                    // Mostra dialog per selezionare periodo
+                    const today = frappe.datetime.get_today();
+                    const last_month = frappe.datetime.add_months(today, -1);
+
+                    frappe.prompt([
+                        {
+                            fieldname: 'from_date',
+                            fieldtype: 'Date',
+                            label: __('From Date'),
+                            default: last_month,
+                            reqd: 1
+                        },
+                        {
+                            fieldname: 'to_date',
+                            fieldtype: 'Date',
+                            label: __('To Date'),
+                            default: today,
+                            reqd: 1
+                        }
+                    ], (values) => {
+                        frappe.call({
+                            method: "solede_openbanking.api.business_registry.import_transactions",
+                            args: {
+                                company: frm.doc.company,
+                                from_date: values.from_date,
+                                to_date: values.to_date
+                            },
+                            freeze: true,
+                            freeze_message: __("Importing transactions..."),
+                            callback: function(r) {
+                                if (r.message && r.message.success) {
+                                    frappe.msgprint({
+                                        title: __('Import Completed'),
+                                        message: r.message.message,
+                                        indicator: 'green'
+                                    });
+                                }
+                            }
+                        });
+                    }, __('Import Transactions'), __('Import'));
+                });
             }
 
             // Aggiungi bottoni per gestire gli account selezionati
