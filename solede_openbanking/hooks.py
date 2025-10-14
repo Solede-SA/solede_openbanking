@@ -242,3 +242,19 @@ app_license = "mit"
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
+# Fixtures
+# --------
+fixtures = [
+	{"dt": "Custom Field", "filters": [["name", "in", [
+		"Bank Transaction-acube_section",
+		"Bank Transaction-acube_transaction_id",
+		"Bank Transaction-api_source",
+		"Bank Transaction-acube_booking_date",
+		"Bank Transaction-acube_value_date",
+		"Bank Transaction-acube_column_break",
+		"Bank Transaction-acube_status",
+		"Bank Transaction-acube_category",
+		"Bank Transaction-acube_raw_data"
+	]]]}
+]
+

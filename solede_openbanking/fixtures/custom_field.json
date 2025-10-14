@@ -1,0 +1,102 @@
+[
+ {
+  "doctype": "Custom Field",
+  "name": "Bank Transaction-acube_section",
+  "dt": "Bank Transaction",
+  "module": "Solede Openbanking",
+  "fieldname": "acube_section",
+  "fieldtype": "Section Break",
+  "label": "ACube Open Banking Data",
+  "insert_after": "reference_number",
+  "collapsible": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Bank Transaction-acube_transaction_id",
+  "dt": "Bank Transaction",
+  "module": "Solede Openbanking",
+  "fieldname": "acube_transaction_id",
+  "fieldtype": "Data",
+  "label": "ACube Transaction ID",
+  "insert_after": "acube_section",
+  "read_only": 1,
+  "unique": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Bank Transaction-api_source",
+  "dt": "Bank Transaction",
+  "module": "Solede Openbanking",
+  "fieldname": "api_source",
+  "fieldtype": "Select",
+  "label": "API Source",
+  "options": "\nACube\nManual\nImport",
+  "insert_after": "acube_transaction_id",
+  "read_only": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Bank Transaction-acube_booking_date",
+  "dt": "Bank Transaction",
+  "module": "Solede Openbanking",
+  "fieldname": "acube_booking_date",
+  "fieldtype": "Date",
+  "label": "Booking Date",
+  "insert_after": "api_source",
+  "read_only": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Bank Transaction-acube_value_date",
+  "dt": "Bank Transaction",
+  "module": "Solede Openbanking",
+  "fieldname": "acube_value_date",
+  "fieldtype": "Date",
+  "label": "Value Date",
+  "insert_after": "acube_booking_date",
+  "read_only": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Bank Transaction-acube_column_break",
+  "dt": "Bank Transaction",
+  "module": "Solede Openbanking",
+  "fieldname": "acube_column_break",
+  "fieldtype": "Column Break",
+  "insert_after": "acube_value_date"
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Bank Transaction-acube_status",
+  "dt": "Bank Transaction",
+  "module": "Solede Openbanking",
+  "fieldname": "acube_status",
+  "fieldtype": "Data",
+  "label": "ACube Status",
+  "insert_after": "acube_column_break",
+  "read_only": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Bank Transaction-acube_category",
+  "dt": "Bank Transaction",
+  "module": "Solede Openbanking",
+  "fieldname": "acube_category",
+  "fieldtype": "Data",
+  "label": "Category",
+  "insert_after": "acube_status",
+  "read_only": 1
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Bank Transaction-acube_raw_data",
+  "dt": "Bank Transaction",
+  "module": "Solede Openbanking",
+  "fieldname": "acube_raw_data",
+  "fieldtype": "JSON",
+  "label": "Raw API Data",
+  "insert_after": "acube_category",
+  "read_only": 1,
+  "hidden": 1
+ }
+]

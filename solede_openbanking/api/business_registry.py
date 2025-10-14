@@ -602,3 +602,118 @@ def delete_account(company, uuid):
         error_msg = str(e)
         frappe.log_error(f"URL: {endpoint_url}, Error: {error_msg}", "Delete Account API Error")
         frappe.throw(_("Failed to connect to API: {0}").format(error_msg))
+
+
+@frappe.whitelist()
+def get_transactions(company, account_uuid=None, from_date=None, to_date=None, page=1, items_per_page=30):
+	"""
+	Recupera le transazioni bancarie dal Business Registry ACube.
+	Se non specificato, recupera le transazioni del mese corrente.
+
+	Args:
+		company: Nome della company
+		account_uuid: UUID account specifico (opzionale, se None prende tutti gli account abilitati)
+		from_date: Data inizio (formato YYYY-MM-DD)
+		to_date: Data fine (formato YYYY-MM-DD)
+		page: Numero pagina (default 1)
+		items_per_page: Items per pagina (default 30, max 100)
+
+	Returns:
+		dict: {
+			"success": True,
+			"transactions": [...],
+			"total": count,
+			"page": page,
+			"items_per_page": items_per_page
+		}
+	"""
+	# Ottieni le impostazioni
+	settings = frappe.get_doc("OpenBanking Settings", company)
+
+	# Ottieni il fiscal ID dalla Company
+	company_doc = frappe.get_doc("Company", company)
+	fiscal_id = company_doc.tax_id
+
+	if not fiscal_id:
+		frappe.throw(_("Tax ID (Partita IVA) not found in Company {0}").format(company))
+
+	# Verifica che l'Open Banking API URL sia configurato
+	if not settings.openbanking_api_url:
+		frappe.throw(_("Open Banking API URL not configured in settings"))
+
+	# Ottieni un token valido
+	token = get_valid_token(company)
+
+	# Prepara l'URL per recuperare le transazioni
+	endpoint_url = f"{settings.openbanking_api_url.rstrip('/')}/business-registry/{fiscal_id}/transactions"
+
+	# Prepara i parametri query
+	params = {
+		"page": page,
+		"itemsPerPage": min(int(items_per_page), 100)  # Max 100
+	}
+
+	# Aggiungi filtro account se specificato
+	if account_uuid:
+		params["account.uuid"] = account_uuid
+
+	# Aggiungi filtri data se specificati
+	if from_date:
+		params["madeOn[after]"] = from_date
+	if to_date:
+		params["madeOn[before]"] = to_date
+
+	headers = {
+		"Authorization": f"Bearer {token}"
+	}
+
+	print("=" * 80)
+	print(f"DEBUG - Get Transactions")
+	print(f"Endpoint URL: {endpoint_url}")
+	print(f"Params: {params}")
+	print("=" * 80)
+
+	try:
+		# Effettua la richiesta GET
+		response = requests.get(endpoint_url, headers=headers, params=params, timeout=30)
+
+		print(f"Response Status Code: {response.status_code}")
+		print(f"Response Body (first 500 chars): {response.text[:500]}")
+
+		# Verifica lo status code (200 = success)
+		if response.status_code == 200:
+			transactions_data = response.json()
+
+			return {
+				"success": True,
+				"transactions": transactions_data,
+				"total": len(transactions_data),
+				"page": page,
+				"items_per_page": items_per_page
+			}
+		elif response.status_code == 404:
+			# Nessuna transazione trovata
+			return {
+				"success": True,
+				"transactions": [],
+				"total": 0,
+				"page": page,
+				"items_per_page": items_per_page
+			}
+		else:
+			# Gestisci altri status code
+			try:
+				error_data = response.json()
+				detail = error_data.get('detail', 'Unknown error')
+			except:
+				detail = f"HTTP {response.status_code}"
+
+			error_title = f"Get Transactions ({response.status_code})"
+			error_details = f"URL: {endpoint_url}\nParams: {params}\nDetail: {detail}"
+			frappe.log_error(error_details, error_title)
+			frappe.throw(_("Failed to retrieve transactions (HTTP {0}): {1}").format(response.status_code, detail))
+
+	except requests.exceptions.RequestException as e:
+		error_msg = str(e)
+		frappe.log_error(f"URL: {endpoint_url}, Error: {error_msg}", "Get Transactions API Error")
+		frappe.throw(_("Failed to connect to API: {0}").format(error_msg))
