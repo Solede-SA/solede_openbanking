@@ -12,37 +12,72 @@ from frappe import _
 _public_key_cache = None
 
 
-def get_acube_public_key():
+def get_company_from_fiscal_id(fiscal_id):
+	"""
+	Trova la company associata a un fiscal_id.
+
+	Args:
+		fiscal_id: Il fiscal ID della company
+
+	Returns:
+		str: Il nome della company
+
+	Raises:
+		frappe.ValidationError: Se la company non viene trovata
+	"""
+	company = frappe.db.get_value("Company", {"tax_id": fiscal_id}, "name")
+	if not company:
+		frappe.throw(_(f"Company non trovata per fiscal_id: {fiscal_id}"))
+	return company
+
+
+def get_acube_public_key(fiscal_id):
 	"""
 	Recupera la chiave pubblica di ACube per verificare le firme.
 	Usa cache per evitare chiamate ripetute.
+
+	Args:
+		fiscal_id: Il fiscal ID per trovare le impostazioni corrette
 	"""
 	global _public_key_cache
 
 	if _public_key_cache:
 		return _public_key_cache
 
-	# Determina l'URL in base all'ambiente
-	settings = frappe.get_single("OpenBanking Settings")
-	if settings and settings.sandbox_mode:
-		url = "https://common-sandbox.api.acubeapi.com/signature-public-key"
-	else:
-		url = "https://common.api.acubeapi.com/signature-public-key"
+	# Trova la company e le sue impostazioni
+	company = get_company_from_fiscal_id(fiscal_id)
+	api_url = frappe.db.get_value("OpenBanking Settings", {"company": company}, "api_url")
+	if not api_url:
+		frappe.throw(_(f"OpenBanking Settings non trovato per company: {company}"))
+
+	# Costruisci l'URL per la chiave pubblica
+	url = f"{api_url}/signature-public-key"
 
 	try:
 		response = requests.get(url, timeout=10)
 		response.raise_for_status()
-		_public_key_cache = response.json().get("public_key")
+		public_key_pem = response.json().get("public_key")
+
+		# La chiave è in formato PEM, carichiamola con cryptography
+		from cryptography.hazmat.primitives import serialization
+
+		# Carica la chiave pubblica dal formato PEM
+		_public_key_cache = serialization.load_pem_public_key(public_key_pem.encode('utf-8'))
+
 		return _public_key_cache
 	except Exception as e:
 		frappe.log_error(f"Failed to fetch ACube public key: {str(e)}", "ACube Public Key Error")
 		frappe.throw(_("Impossibile recuperare la chiave pubblica di ACube"))
 
 
-def verify_http_signature(request):
+def verify_http_signature(request, fiscal_id):
 	"""
 	Verifica la firma HTTP del webhook usando ED25519.
 	Richiede gli header: signature, signature-input, content-digest.
+
+	Args:
+		request: L'oggetto request di Frappe
+		fiscal_id: Il fiscal ID per trovare le impostazioni corrette
 
 	Returns:
 		bool: True se la firma è valida
@@ -57,23 +92,42 @@ def verify_http_signature(request):
 		content_digest = request.headers.get("content-digest")
 
 		if not all([signature, signature_input, content_digest]):
-			frappe.log_error("Missing required signature headers", "Webhook Signature Error")
+			missing = []
+			if not signature: missing.append("signature")
+			if not signature_input: missing.append("signature-input")
+			if not content_digest: missing.append("content-digest")
+			frappe.log_error(
+				f"Missing required signature headers: {', '.join(missing)}",
+				"Webhook Signature Error"
+			)
 			return False
 
 		# Crea un oggetto simile a una request per la verifica
 		class RequestWrapper:
 			def __init__(self, frappe_request):
 				self.method = frappe_request.method
-				self.url = frappe_request.url
 				self.headers = dict(frappe_request.headers)
 				self.body = frappe_request.get_data()
 
+				# Ricostruisci l'URL usando gli header X-Forwarded-* se presenti
+				forwarded_host = frappe_request.headers.get("X-Forwarded-Host")
+				forwarded_proto = frappe_request.headers.get("X-Forwarded-Proto")
+
+				if forwarded_host and forwarded_proto:
+					# Usa l'URL originale che ACube ha usato per firmare
+					self.url = f"{forwarded_proto}://{forwarded_host}{frappe_request.path}"
+				else:
+					self.url = frappe_request.url
+
 		# Resolver per la chiave pubblica
 		class KeyResolver:
+			def __init__(self, fiscal_id):
+				self.fiscal_id = fiscal_id
+
 			def resolve_public_key(self, key_id):
 				if key_id != "acube":
 					raise ValueError("Invalid key ID")
-				return get_acube_public_key()
+				return get_acube_public_key(self.fiscal_id)
 
 		wrapped_request = RequestWrapper(request)
 
@@ -81,7 +135,7 @@ def verify_http_signature(request):
 		HTTPSignatureAuth.verify(
 			wrapped_request,
 			signature_algorithm=algorithms.ED25519,
-			key_resolver=KeyResolver()
+			key_resolver=KeyResolver(fiscal_id)
 		)
 
 		return True
@@ -95,11 +149,22 @@ def verify_http_signature(request):
 		return True
 
 	except InvalidSignature as e:
-		frappe.log_error(f"Invalid HTTP signature: {str(e)}", "Webhook Signature Error")
+		frappe.log_error(
+			f"Invalid HTTP signature: {str(e)}\n"
+			f"Request URL: {request.url}\n"
+			f"Request Method: {request.method}\n"
+			f"Headers: {json.dumps(dict(request.headers), indent=2)}",
+			"Webhook Signature Error"
+		)
 		return False
 
 	except Exception as e:
-		frappe.log_error(f"Signature verification error: {str(e)}", "Webhook Signature Error")
+		frappe.log_error(
+			f"Signature verification error: {str(e)}\n"
+			f"Request URL: {request.url}\n"
+			f"Request Method: {request.method}",
+			"Webhook Signature Error"
+		)
 		return False
 
 
@@ -116,33 +181,23 @@ def acube_webhook():
 		if frappe.request.method != "POST":
 			frappe.throw(_("Only POST requests are allowed"))
 
-		# Verifica firma HTTP
-		if not verify_http_signature(frappe.request):
-			frappe.throw(_("Invalid HTTP signature"))
-
-		# Ottieni il payload
+		# Ottieni il payload per estrarre il fiscal_id
 		payload = frappe.request.get_json()
 		if not payload:
 			frappe.throw(_("Invalid payload"))
 
-		# Determina il tipo di webhook
-		webhook_type = determine_webhook_type(payload)
-
-		# Trova la company tramite fiscal_id
 		fiscal_id = payload.get("fiscalId")
-		company = frappe.db.get_value("OpenBanking Settings", {"fiscal_id": fiscal_id}, "name")
+
+		# Verifica firma HTTP usando il fiscal_id
+		if not verify_http_signature(frappe.request, fiscal_id):
+			frappe.throw(_("Invalid HTTP signature"))
+
+		# Determina il tipo di webhook e trova la company
+		webhook_type = determine_webhook_type(payload)
+		company = get_company_from_fiscal_id(fiscal_id)
 
 		# Crea log del webhook
-		log = frappe.get_doc({
-			"doctype": "ACube Webhook Log",
-			"webhook_type": webhook_type,
-			"fiscal_id": fiscal_id,
-			"company": company,
-			"received_at": datetime.now(),
-			"payload": json.dumps(payload, indent=2),
-			"processed": 0
-		})
-		log.insert(ignore_permissions=True)
+		log = create_webhook_log(webhook_type, fiscal_id, company, payload)
 
 		# Processa il webhook
 		result = None
@@ -154,10 +209,7 @@ def acube_webhook():
 			result = handle_payment_webhook(payload, company, log.name)
 
 		# Aggiorna il log
-		log.processed = 1
-		log.processing_result = result if result else "Processed successfully"
-		log.save(ignore_permissions=True)
-		frappe.db.commit()
+		update_webhook_log(log, result=result if result else "Processed successfully")
 
 		return {"success": True, "message": "Webhook received and processed"}
 
@@ -167,12 +219,54 @@ def acube_webhook():
 
 		# Aggiorna log con errore se esiste
 		if 'log' in locals():
-			log.processed = 1
-			log.error_message = error_msg
-			log.save(ignore_permissions=True)
-			frappe.db.commit()
+			update_webhook_log(log, error_message=error_msg)
 
 		return {"success": False, "error": error_msg}
+
+
+def create_webhook_log(webhook_type, fiscal_id, company, payload):
+	"""
+	Crea un log del webhook ricevuto.
+
+	Args:
+		webhook_type: Tipo di webhook (connect, reconnect, payment, unknown)
+		fiscal_id: Fiscal ID della company
+		company: Nome della company
+		payload: Payload JSON del webhook
+
+	Returns:
+		frappe.Document: Il documento del log creato
+	"""
+	log = frappe.get_doc({
+		"doctype": "ACube Webhook Log",
+		"webhook_type": webhook_type,
+		"fiscal_id": fiscal_id,
+		"company": company,
+		"received_at": datetime.now(),
+		"payload": json.dumps(payload, indent=2),
+		"processed": 0
+	})
+	log.insert(ignore_permissions=True)
+	return log
+
+
+def update_webhook_log(log, processed=1, result=None, error_message=None):
+	"""
+	Aggiorna un log del webhook con il risultato dell'elaborazione.
+
+	Args:
+		log: Il documento del log da aggiornare
+		processed: 1 se elaborato, 0 altrimenti
+		result: Risultato dell'elaborazione
+		error_message: Messaggio di errore se presente
+	"""
+	log.processed = processed
+	if result:
+		log.processing_result = result
+	if error_message:
+		log.error_message = error_message
+	log.save(ignore_permissions=True)
+	frappe.db.commit()
 
 
 def determine_webhook_type(payload):

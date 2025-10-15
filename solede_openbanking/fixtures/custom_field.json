@@ -90,7 +90,7 @@
   "length": 0,
   "link_filters": null,
   "mandatory_depends_on": null,
-  "modified": "2025-10-15 12:00:00.000000",
+  "modified": "2025-10-15 12:00:00",
   "module": "Solede Openbanking",
   "name": "Bank Transaction-acube_transaction_log",
   "no_copy": 0,
