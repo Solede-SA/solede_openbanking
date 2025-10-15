@@ -55,6 +55,32 @@ def parse_iso_datetime(iso_string):
         return None
 
 
+def format_datetime_display(iso_string):
+    """
+    Converte una stringa datetime ISO 8601 in formato leggibile usando frappe.utils.
+
+    Args:
+        iso_string: Stringa in formato ISO 8601 (es. "2026-01-11T14:51:05Z")
+
+    Returns:
+        Stringa formattata secondo le impostazioni dell'utente
+    """
+    if not iso_string:
+        return "N/A"
+
+    try:
+        # Converte in formato MySQL usando la funzione esistente
+        mysql_datetime = parse_iso_datetime(iso_string)
+        if not mysql_datetime:
+            return "N/A"
+
+        # Usa frappe.utils.format_datetime per formattare secondo le preferenze dell'utente
+        return frappe.utils.format_datetime(mysql_datetime)
+    except Exception as e:
+        frappe.log_error(f"Error formatting datetime: {iso_string}, Error: {str(e)}", "DateTime Format Error")
+        return "N/A"
+
+
 def validate_password(password):
     """
     Valida che la password rispetti i requisiti:
@@ -227,6 +253,7 @@ def get_accounts(company):
                 "iban": account.get("iban"),
                 "bank_display": account.get("providerName"),
                 "balance_display": format_currency(account.get("balance"), account.get("currencyCode", "EUR")),
+                "consent_expires_display": format_datetime_display(account.get("consentExpiresAt")),
                 "enabled": 1 if account.get("enabled") else 0,
                 "raw_data": json.dumps(account, indent=2)
             })

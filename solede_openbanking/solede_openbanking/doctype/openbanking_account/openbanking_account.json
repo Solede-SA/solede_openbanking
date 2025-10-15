@@ -10,6 +10,7 @@
   "iban",
   "bank_display",
   "balance_display",
+  "consent_expires_display",
   "enabled",
   "raw_data"
  ],
@@ -40,6 +41,13 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Balance",
+   "read_only": 1
+  },
+  {
+   "fieldname": "consent_expires_display",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Consent Expires",
    "read_only": 1
   },
   {
