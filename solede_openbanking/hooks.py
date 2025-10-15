@@ -148,23 +148,11 @@ app_include_js = "/assets/solede_openbanking/js/openbanking_helpers.js"
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"solede_openbanking.tasks.all"
-# 	],
-# 	"daily": [
-# 		"solede_openbanking.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"solede_openbanking.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"solede_openbanking.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"solede_openbanking.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	"hourly": [
+		"solede_openbanking.api.scheduled_tasks.sync_all_openbanking_data"
+	]
+}
 
 # Testing
 # -------
