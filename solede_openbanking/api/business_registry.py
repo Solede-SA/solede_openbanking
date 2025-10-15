@@ -750,4 +750,5 @@ def create_bank_transaction_from_acube(company, bank_account, account_info, tran
 			bank_txn.bank_party_name = extra.get("payee")[:140]
 
 	bank_txn.insert(ignore_permissions=True)
+	bank_txn.submit()
 	return bank_txn
