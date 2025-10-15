@@ -241,6 +241,7 @@ fixtures = [
                 "in",
                 [
                     "Bank Transaction-acube_section",
+                    "Bank Transaction-acube_transaction_log",
                     "Bank Transaction-acube_transaction_id",
                     "Bank Transaction-api_source",
                     "Bank Transaction-acube_booking_date",

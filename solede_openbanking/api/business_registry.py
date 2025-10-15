@@ -606,7 +606,8 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 						company=company,
 						bank_account=bank_account,
 						account_info=account_info,
-						transaction_data=txn
+						transaction_data=txn,
+						transaction_log=log_entry.name
 					)
 
 					# Aggiorna log con successo
@@ -698,7 +699,7 @@ def create_transaction_log(company, account_uuid, transaction_data, bank_account
 	return log
 
 
-def create_bank_transaction_from_acube(company, bank_account, account_info, transaction_data):
+def create_bank_transaction_from_acube(company, bank_account, account_info, transaction_data, transaction_log=None):
 	"""
 	Crea un Bank Transaction da dati ACube.
 
@@ -707,6 +708,7 @@ def create_bank_transaction_from_acube(company, bank_account, account_info, tran
 		bank_account: Bank Account ERPNext
 		account_info: Info account dalla child table
 		transaction_data: Dati transazione da API
+		transaction_log: Nome del documento ACube Transaction Log (opzionale)
 
 	Returns:
 		Bank Transaction document
@@ -731,6 +733,7 @@ def create_bank_transaction_from_acube(company, bank_account, account_info, tran
 		"reference_number": transaction_data.get("transactionId"),
 		"transaction_id": transaction_data.get("transactionId"),
 		# Custom fields ACube
+		"acube_transaction_log": transaction_log,
 		"acube_transaction_id": transaction_data.get("transactionId"),
 		"api_source": "ACube",
 		"acube_booking_date": parse_date(transaction_data.get("madeOn")),
