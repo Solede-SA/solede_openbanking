@@ -755,3 +755,62 @@ def create_bank_transaction_from_acube(company, bank_account, account_info, tran
 	bank_txn.insert(ignore_permissions=True)
 	bank_txn.submit()
 	return bank_txn
+
+
+@frappe.whitelist()
+def cancel_duplicate_transaction(bank_transaction):
+	"""
+	Annulla una Bank Transaction duplicata importata da ACube.
+	La Bank Transaction viene cancellata (docstatus=2) rimanendo visibile con stato "Cancelled".
+	Non può più essere riconciliata. Il log ACube viene aggiornato come "Duplicate".
+
+	Args:
+		bank_transaction: Nome del documento Bank Transaction da annullare
+
+	Returns:
+		dict: {"success": True, "message": "..."}
+	"""
+	# Ottieni il documento Bank Transaction
+	bank_txn = frappe.get_doc("Bank Transaction", bank_transaction)
+
+	# Verifica che provenga da ACube
+	if bank_txn.api_source != "ACube":
+		frappe.throw(_("Solo le transazioni importate da ACube possono essere annullate con questa funzione"))
+
+	# Verifica che sia submitted
+	if bank_txn.docstatus != 1:
+		frappe.throw(_("Solo le transazioni submitted possono essere annullate"))
+
+	# Verifica che non sia già riconciliata
+	if bank_txn.status == "Reconciled":
+		frappe.throw(_("Non è possibile annullare una transazione già riconciliata"))
+
+	# Ottieni il Transaction Log collegato
+	transaction_log_name = bank_txn.acube_transaction_log
+
+	try:
+		# Cancel la Bank Transaction (docstatus diventa 2 = Cancelled)
+		# Questo la rimuove automaticamente dalla riconciliazione
+		bank_txn.cancel()
+		frappe.logger().info(f"Bank Transaction {bank_transaction} cancelled as duplicate")
+
+		# Aggiorna il Transaction Log se esiste
+		if transaction_log_name:
+			frappe.db.set_value("ACube Transaction Log", transaction_log_name, {
+				"import_status": "Duplicate",
+				"error_message": "Transazione annullata manualmente come duplicato"
+			})
+			frappe.logger().info(f"ACube Transaction Log {transaction_log_name} marked as duplicate")
+
+		frappe.db.commit()
+
+		return {
+			"success": True,
+			"message": _("Transazione annullata come duplicato. Rimane visibile con stato Cancelled e non può più essere riconciliata.")
+		}
+
+	except Exception as e:
+		frappe.db.rollback()
+		error_msg = str(e)
+		frappe.log_error(f"Error cancelling transaction {bank_transaction}: {error_msg}", "Cancel Transaction Error")
+		frappe.throw(_("Errore durante l'annullamento della transazione: {0}").format(error_msg))
