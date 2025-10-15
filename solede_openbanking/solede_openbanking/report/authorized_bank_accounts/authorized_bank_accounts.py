@@ -37,6 +37,12 @@ def get_columns():
 			"width": 120
 		},
 		{
+			"fieldname": "consent_expires_display",
+			"label": _("Consent Expires"),
+			"fieldtype": "Data",
+			"width": 150
+		},
+		{
 			"fieldname": "enabled",
 			"label": _("Enabled"),
 			"fieldtype": "Check",
@@ -63,7 +69,7 @@ def get_data(filters):
 		accounts = frappe.get_all(
 			"OpenBanking Account",
 			filters={"parent": settings.name, "parenttype": "OpenBanking Settings"},
-			fields=["iban", "bank_display", "balance_display", "enabled", "uuid", "raw_data"]
+			fields=["iban", "bank_display", "balance_display", "consent_expires_display", "enabled", "uuid", "raw_data"]
 		)
 
 		for account in accounts:
@@ -80,6 +86,7 @@ def get_data(filters):
 				"iban": account.iban,
 				"bank_display": account.bank_display,
 				"balance_display": account.balance_display,
+				"consent_expires_display": account.consent_expires_display,
 				"enabled": account.enabled,
 				"uuid": account.uuid,
 				"_balance_numeric": balance_numeric
