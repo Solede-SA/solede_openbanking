@@ -1,0 +1,91 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-01-15 14:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "event",
+  "target_url",
+  "column_break_3",
+  "webhook_uuid",
+  "configured",
+  "section_break_5",
+  "authentication_type",
+  "authentication_key",
+  "authentication_token"
+ ],
+ "fields": [
+  {
+   "fieldname": "event",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Event",
+   "options": "connect\nreconnect\npayment",
+   "reqd": 1
+  },
+  {
+   "fieldname": "target_url",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Target URL",
+   "description": "URL specifico per questo webhook (opzionale). Se vuoto, usa Webhook Base URL dal parent."
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "webhook_uuid",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Webhook UUID",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "configured",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Configured",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_break_5",
+   "fieldtype": "Section Break",
+   "label": "Authentication (Optional)"
+  },
+  {
+   "fieldname": "authentication_type",
+   "fieldtype": "Select",
+   "label": "Authentication Type",
+   "options": "\nquery\nheader"
+  },
+  {
+   "depends_on": "authentication_type",
+   "fieldname": "authentication_key",
+   "fieldtype": "Data",
+   "label": "Authentication Key"
+  },
+  {
+   "depends_on": "authentication_type",
+   "fieldname": "authentication_token",
+   "fieldtype": "Password",
+   "label": "Authentication Token"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-01-15 14:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Solede Openbanking",
+ "name": "OpenBanking Webhook",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

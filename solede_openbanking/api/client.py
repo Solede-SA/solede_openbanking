@@ -97,6 +97,9 @@ class ACubeAPIClient:
 
 			# Verifica status code
 			if response.status_code in expected_status_codes:
+				# Se la risposta è vuota (es. 204 No Content), ritorna dict vuoto
+				if not response.text or response.text.strip() == '':
+					return {}
 				return response.json()
 			else:
 				handle_api_error(response, url, operation_name)

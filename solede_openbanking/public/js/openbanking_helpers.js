@@ -249,5 +249,87 @@ window.OpenBankingHelpers = {
 				});
 			}
 		);
+	},
+
+	/**
+	 * Configura tutti i webhook
+	 */
+	configure_all_webhooks: function(frm) {
+		frappe.confirm(
+			__('Questa operazione creerà i webhook su ACube per tutti gli eventi configurati. Continuare?'),
+			() => {
+				this.call_api(
+					"solede_openbanking.api.webhook_management.configure_all_webhooks",
+					{ company: frm.doc.name },
+					"Configurazione webhook in corso...",
+					(r) => frm.reload_doc()
+				);
+			}
+		);
+	},
+
+	/**
+	 * Sincronizza webhook
+	 */
+	sync_webhooks: function(frm) {
+		this.call_api(
+			"solede_openbanking.api.webhook_management.sync_webhooks",
+			{ company: frm.doc.name },
+			"Sincronizzazione webhook in corso...",
+			(r) => frm.reload_doc()
+		);
+	},
+
+	/**
+	 * Rimuovi tutti i webhook
+	 */
+	remove_all_webhooks: function(frm) {
+		frappe.confirm(
+			__('Questa operazione rimuoverà TUTTI i webhook configurati su ACube. Continuare?'),
+			() => {
+				frappe.call({
+					method: "solede_openbanking.api.webhook_management.remove_all_webhooks",
+					args: { company: frm.doc.name },
+					freeze: true,
+					freeze_message: __('Rimozione webhook in corso...'),
+					callback: function(r) {
+						if (r.message && r.message.success) {
+							frappe.show_alert({
+								message: r.message.message,
+								indicator: 'orange'
+							}, 5);
+							frm.reload_doc();
+						}
+					}
+				});
+			}
+		);
+	},
+
+	/**
+	 * Testa un webhook specifico
+	 */
+	test_webhook: function(frm, event) {
+		frappe.call({
+			method: "solede_openbanking.api.webhook_management.test_webhook",
+			args: {
+				company: frm.doc.name,
+				event: event
+			},
+			freeze: true,
+			freeze_message: __('Test webhook in corso...'),
+			callback: function(r) {
+				if (r.message && r.message.success) {
+					frappe.msgprint({
+						title: __('Test Webhook Completato'),
+						message: __('Evento: {0}<br><br>Dettagli:<br><pre>{1}</pre>', [
+							event,
+							JSON.stringify(r.message.test_result, null, 2)
+						]),
+						indicator: 'green'
+					});
+				}
+			}
+		});
 	}
 };

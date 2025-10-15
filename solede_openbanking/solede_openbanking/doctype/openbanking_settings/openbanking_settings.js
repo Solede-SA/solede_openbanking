@@ -221,6 +221,34 @@ frappe.ui.form.on("OpenBanking Settings", {
                 }, __("Actions"));
             }
 
+            // Bottoni webhook - visibili se Business Registry creato
+            if (frm.doc.business_registry_created) {
+                // Sincronizza sempre disponibile
+                frm.add_custom_button(__("Sincronizza Webhook"), () => {
+                    OpenBankingHelpers.sync_webhooks(frm);
+                }, __("Webhook"));
+
+                // Configura e Rimuovi solo se ci sono webhook nella tabella
+                if (frm.doc.webhooks && frm.doc.webhooks.length > 0) {
+                    frm.add_custom_button(__("Configura Tutti i Webhook"), () => {
+                        OpenBankingHelpers.configure_all_webhooks(frm);
+                    }, __("Webhook"));
+
+                    frm.add_custom_button(__("Rimuovi Tutti i Webhook"), () => {
+                        OpenBankingHelpers.remove_all_webhooks(frm);
+                    }, __("Webhook"));
+
+                    // Bottoni test per ciascun webhook configurato
+                    frm.doc.webhooks.forEach(function(webhook) {
+                        if (webhook.configured && webhook.webhook_uuid) {
+                            frm.add_custom_button(__('Test: {0}', [webhook.event]), () => {
+                                OpenBankingHelpers.test_webhook(frm, webhook.event);
+                            }, __("Webhook"));
+                        }
+                    });
+                }
+            }
+
             // Aggiungi bottoni per gestire gli account selezionati nella grid
             if (frm.doc.accounts && frm.doc.accounts.length > 0) {
                 // Gestisci il click sulla riga per aprire i dettagli
