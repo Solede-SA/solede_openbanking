@@ -381,19 +381,122 @@ def handle_connect_webhook(payload, company, log_name):
 
 def handle_payment_webhook(payload, company, log_name):
 	"""
-	Gestisce evento payment: logga l'evento.
+	Gestisce evento payment:
+	- Aggiorna OpenBanking Payment con nuovo status
+	- Se completed: crea Payment Entry collegato a Purchase Invoice
+	- Se failed: notifica errore
 	"""
 	fiscal_id = payload.get("fiscalId")
+	payment_uuid = payload.get("paymentUuid")
 	payment_direction = payload.get("paymentDirection", "Unknown")
 	payment_status = payload.get("paymentStatus", "Unknown")
 	amount = payload.get("amount", 0)
 	currency = payload.get("currencyCode", "EUR")
 
-	if "errorClass" in payload:
-		error_class = payload.get("errorClass")
-		error_message = payload.get("errorMessage", "No error message")
-		frappe.logger().error(f"Payment {payment_direction} failed. Status: {payment_status}. Amount: {amount} {currency}. Error: {error_class}")
-		return f"Payment {payment_direction} failed. Status: {payment_status}. Amount: {amount} {currency}. Error: {error_class} - {error_message}"
-	else:
-		frappe.logger().info(f"Payment {payment_direction} successful. Status: {payment_status}. Amount: {amount} {currency}")
-		return f"Payment {payment_direction} successful. Status: {payment_status}. Amount: {amount} {currency}"
+	# Trova OpenBanking Payment per UUID
+	payment_name = frappe.db.get_value("OpenBanking Payment", {"uuid": payment_uuid}, "name")
+
+	if not payment_name:
+		error_msg = f"OpenBanking Payment not found for UUID: {payment_uuid}"
+		frappe.logger().error(error_msg)
+		return error_msg
+
+	try:
+		payment_doc = frappe.get_doc("OpenBanking Payment", payment_name)
+
+		# Aggiorna status
+		old_status = payment_doc.status
+		payment_doc.status = payment_status.lower()
+
+		# Gestisci errori
+		if "errorClass" in payload:
+			error_class = payload.get("errorClass")
+			error_message = payload.get("errorMessage", "No error message")
+			payment_doc.error_message = f"{error_class}: {error_message}"
+			payment_doc.save(ignore_permissions=True)
+			frappe.db.commit()
+
+			frappe.logger().error(
+				f"Payment {payment_direction} failed. UUID: {payment_uuid}. "
+				f"Status: {payment_status}. Amount: {amount} {currency}. Error: {error_class}"
+			)
+			return f"Payment {payment_direction} failed. Status: {payment_status}. Amount: {amount} {currency}. Error: {error_class} - {error_message}"
+
+		# Aggiorna campi dal payload
+		payment_doc.end_to_end_id = payload.get("endToEndId")
+		payment_doc.raw_response = json.dumps(payload, indent=2)
+		payment_doc.save(ignore_permissions=True)
+		frappe.db.commit()
+
+		# Se completed, crea Payment Entry
+		if payment_status.lower() == "completed" and payment_doc.reference_doctype == "Purchase Invoice":
+			create_payment_entry_from_payment(payment_doc)
+
+		frappe.logger().info(
+			f"Payment {payment_direction} updated. UUID: {payment_uuid}. "
+			f"Status: {old_status} -> {payment_status}. Amount: {amount} {currency}"
+		)
+		return f"Payment {payment_direction} updated. Status: {old_status} -> {payment_status}. Amount: {amount} {currency}"
+
+	except Exception as e:
+		error_msg = f"Error processing payment webhook: {str(e)}"
+		frappe.log_error(frappe.get_traceback(), "Payment Webhook Error")
+		return error_msg
+
+
+def create_payment_entry_from_payment(payment_doc):
+	"""
+	Crea Payment Entry da OpenBanking Payment per Purchase Invoice.
+	NO FALLBACK: Se c'è un errore, viene propagato.
+
+	Args:
+		payment_doc: Documento OpenBanking Payment
+	"""
+	if not payment_doc.reference_doctype or not payment_doc.reference_name:
+		frappe.throw(_("OpenBanking Payment non ha riferimento a documento"))
+
+	if payment_doc.reference_doctype != "Purchase Invoice":
+		frappe.throw(_("Payment Entry automatica supportata solo per Purchase Invoice"))
+
+	# Verifica che Purchase Invoice esista
+	if not frappe.db.exists("Purchase Invoice", payment_doc.reference_name):
+		frappe.throw(_("Purchase Invoice {0} not found").format(payment_doc.reference_name))
+
+	purchase_invoice = frappe.get_doc("Purchase Invoice", payment_doc.reference_name)
+
+	# Verifica che non sia già pagata
+	if purchase_invoice.outstanding_amount <= 0:
+		frappe.logger().info(f"Purchase Invoice {purchase_invoice.name} already paid")
+		return
+
+	# Crea Payment Entry
+	from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+
+	payment_entry = get_payment_entry("Purchase Invoice", purchase_invoice.name, bank_amount=payment_doc.amount)
+
+	# Configura Payment Entry
+	payment_entry.paid_amount = payment_doc.amount
+	payment_entry.received_amount = payment_doc.amount
+	payment_entry.reference_no = payment_doc.end_to_end_id or payment_doc.uuid
+	payment_entry.reference_date = frappe.utils.today()
+	payment_entry.remarks = f"Bonifico SEPA via Open Banking - {payment_doc.description}"
+
+	# Collega OpenBanking Payment
+	payment_entry.custom_openbanking_payment = payment_doc.name
+
+	# Salva e submit
+	payment_entry.insert(ignore_permissions=True)
+	payment_entry.submit()
+	frappe.db.commit()
+
+	frappe.logger().info(f"Payment Entry {payment_entry.name} created for Purchase Invoice {purchase_invoice.name}")
+
+	# Notifica utente
+	frappe.publish_realtime(
+		event="msgprint",
+		message=_("Payment Entry {0} created for Purchase Invoice {1}").format(
+			payment_entry.name,
+			purchase_invoice.name
+		),
+		user=purchase_invoice.owner
+	)

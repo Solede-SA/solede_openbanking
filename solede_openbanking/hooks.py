@@ -45,7 +45,8 @@ app_include_js = "/assets/solede_openbanking/js/openbanking_helpers.js"
 # include js in doctype views
 doctype_js = {
 	"Bank Transaction": "public/js/bank_transaction.js",
-	"Supplier": "public/js/supplier.js"
+	"Supplier": "public/js/supplier.js",
+	"Purchase Invoice": "public/js/purchase_invoice.js"
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
