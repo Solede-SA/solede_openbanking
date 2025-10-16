@@ -324,7 +324,7 @@ def get_or_create_bank(bank_info):
 
 
 @frappe.whitelist()
-def validate_iban_api(iban, company=None):
+def validate_iban_api(iban, company=None, party_type=None, party=None):
 	"""API per validare un IBAN dal client"""
 	try:
 		iban_clean = iban.replace(" ", "").upper()
@@ -335,6 +335,31 @@ def validate_iban_api(iban, company=None):
 				"valid": False,
 				"message": _("IBAN non valido")
 			}
+
+		# VERIFICA se esiste già per questo fornitore/cliente
+		if party_type and party:
+			existing_account = frappe.db.exists(
+				"Bank Account",
+				{
+					"iban": iban_clean,
+					"party_type": party_type,
+					"party": party
+				}
+			)
+
+			if existing_account:
+				account_doc = frappe.get_doc("Bank Account", existing_account)
+				return {
+					"valid": True,
+					"already_exists": True,
+					"account_name": account_doc.name,
+					"message": _("Bank Account già esistente: {0}").format(account_doc.name),
+					"bank_info": {
+						"bank_name": frappe.db.get_value("Bank", account_doc.bank, "bank_name") if account_doc.bank else None,
+						"swift_number": None,
+						"country_code": iban_clean[:2]
+					}
+				}
 
 		# Se company non è specificata, usa quella di default dell'utente
 		if not company:
@@ -349,6 +374,7 @@ def validate_iban_api(iban, company=None):
 		bank_info = enrich_iban(iban_clean, company)
 		return {
 			"valid": True,
+			"already_exists": False,
 			"bank_info": bank_info
 		}
 
