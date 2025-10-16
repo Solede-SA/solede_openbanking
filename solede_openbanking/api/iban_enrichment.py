@@ -209,6 +209,29 @@ def create_bank_and_account_from_iban(iban, party_type, party, account_name=None
 	# Rimuovi spazi
 	iban_clean = iban.replace(" ", "").upper()
 
+	# VERIFICA SUBITO se Bank Account esiste già per questo fornitore
+	existing_account = frappe.db.exists(
+		"Bank Account",
+		{
+			"iban": iban_clean,
+			"party_type": party_type,
+			"party": party
+		}
+	)
+
+	if existing_account:
+		account_doc = frappe.get_doc("Bank Account", existing_account)
+		frappe.msgprint(
+			_("Bank Account già esistente per questo {0}: {1}").format(
+				party_type,
+				frappe.bold(account_doc.name)
+			),
+			indicator="orange",
+			alert=True
+		)
+		return account_doc
+
+	# Se non esiste, procedi con validazione e creazione
 	# Ottieni la company dal fornitore/cliente
 	party_doc = frappe.get_doc(party_type, party)
 
@@ -225,25 +248,11 @@ def create_bank_and_account_from_iban(iban, party_type, party, account_name=None
 	if not company:
 		frappe.throw(_("Impossibile determinare la company per {0}").format(party))
 
-	# Arricchisci IBAN con la company
+	# Arricchisci IBAN con la company (SOLO se non esiste già)
 	bank_info = enrich_iban(iban_clean, company)
 
 	# 1. Crea o ottieni Bank
 	bank = get_or_create_bank(bank_info)
-
-	# 2. Verifica se Bank Account esiste già
-	existing_account = frappe.db.exists(
-		"Bank Account",
-		{
-			"iban": iban_clean,
-			"party_type": party_type,
-			"party": party
-		}
-	)
-
-	if existing_account:
-		frappe.msgprint(_("Bank Account già esistente: {0}").format(existing_account))
-		return frappe.get_doc("Bank Account", existing_account)
 
 	# 3. Crea Bank Account
 	if not account_name:
