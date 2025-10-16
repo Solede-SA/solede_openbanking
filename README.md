@@ -32,6 +32,16 @@ Frappe app per l'integrazione con ACube Open Banking API. Questa app permette di
 - **Riconciliazione** - Integrazione nativa con Bank Reconciliation Tool di ERPNext
 - **Dati Completi** - Salvataggio raw data JSON per audit e debugging
 
+### Pagamenti SEPA
+- **Bonifici da Purchase Invoice** - Esegui pagamenti SEPA direttamente da fatture fornitori
+- **SEPA Instant** - Supporto bonifici istantanei (completati in pochi secondi)
+- **Validazione SEPA** - Controllo automatico paese IBAN per bonifici SEPA
+- **IBAN Enrichment** - Creazione automatica Bank/Bank Account da IBAN
+- **Payment Entry Automatico** - Creazione automatica Payment Entry da webhook
+- **Callback Page** - Pagina di ritorno dopo autorizzazione pagamento
+- **Mode of Payment Configurabile** - Modalità pagamento configurabile per ogni company
+- **Tracking Completo** - Tracciamento UUID e End-to-End ID per ogni pagamento
+
 ### Reporting
 - **Authorized Bank Accounts Report** - Visualizzazione conti autorizzati in sola lettura
 - **Ordinamento per Balance** - Conti ordinati per saldo decrescente
@@ -106,6 +116,18 @@ Naviga in **OpenBanking > OpenBanking Settings** e crea un nuovo documento:
 - **Email**: Email del tuo account ACube
 - **Password**: Password del tuo account ACube
 
+#### Configurazione Pagamenti (opzionale)
+- **Callback Base URL**: URL pubblico per callback pagamenti
+  - Sandbox: `https://your-ngrok-url.ngrok.io`
+  - Production: `https://your-domain.com`
+- **Mode of Payment**: Modalità di pagamento per Payment Entry automatici
+  - Seleziona un Mode of Payment esistente (es. "Bonifico Bancario")
+
+#### Configurazione IBAN Validation API (opzionale)
+- **IBAN API Provider**: Provider per validazione IBAN
+  - Opzioni: iban.com, ibanapi.com, api-ninjas
+- **IBAN API Key**: Chiave API del provider selezionato
+
 ## 📖 Guida all'Uso
 
 ### Step 1: Genera Token
@@ -171,6 +193,43 @@ Le transazioni verranno importate in:
 - **Bank Transaction**: Per la riconciliazione
 - **ACube Transaction Log**: Per il tracciamento
 
+### Step 6: Esegui Bonifici SEPA
+
+#### Da Purchase Invoice
+
+1. Crea una Purchase Invoice e fai Submit
+2. Assicurati che abbia un `outstanding_amount > 0`
+3. Clicca **OpenBanking > Esegui Bonifico**
+4. Il sistema verifica/crea il Bank Account del fornitore:
+   - Se il fornitore ha già un IBAN configurato: selezionalo o inseriscine uno nuovo
+   - Se non ha IBAN: inserisci l'IBAN del fornitore
+   - Il sistema validerà l'IBAN e creerà automaticamente Bank e Bank Account
+5. Configura il pagamento:
+   - **Conto da cui pagare**: Seleziona l'account OpenBanking (solo account con supporto pagamenti SEPA)
+   - **IBAN Fornitore**: IBAN destinatario (deve essere paese SEPA)
+   - **Bonifico Istantaneo**: Spunta per SEPA Instant (max €100.000)
+6. Clicca **Avvia Bonifico**
+7. Si apre una finestra per autorizzare il pagamento presso la banca
+8. Dopo l'autorizzazione, il sistema:
+   - Crea un documento **OpenBanking Payment** con status "pending"
+   - Quando la banca completa il pagamento, ACube invia un webhook
+   - Il webhook crea automaticamente un **Payment Entry** con Mode of Payment configurato
+   - La Purchase Invoice viene marcata come **Paid**
+
+#### Monitoraggio Pagamento
+
+- Nella Purchase Invoice vedrai lo status del pagamento
+- Clicca **OpenBanking > Aggiorna Status Pagamento** per controllare manualmente
+- Il documento OpenBanking Payment mostra tutti i dettagli (UUID, End-to-End ID, status)
+
+#### Stati Pagamento
+
+- **pending**: Pagamento inizializzato, in attesa autorizzazione
+- **requested**: Autorizzazione completata, in elaborazione
+- **processing**: Pagamento in corso
+- **completed**: Pagamento completato con successo
+- **failed**: Pagamento fallito
+
 ### Visualizza Report
 
 Naviga in **OpenBanking Workspace** e clicca su **Authorized Bank Accounts** per visualizzare tutti gli account autorizzati ordinati per saldo decrescente.
@@ -185,6 +244,9 @@ solede_openbanking/
 │   ├── authentication.py        # Gestione JWT token
 │   ├── business_registry.py     # Business Registry e operazioni
 │   ├── client.py                # Client API centralizzato
+│   ├── payments.py              # Gestione pagamenti SEPA
+│   ├── iban_enrichment.py       # Validazione e enrichment IBAN
+│   ├── webhooks.py              # Gestione webhook ACube
 │   └── utils.py                 # Utility functions
 ├── solede_openbanking/
 │   ├── doctype/
@@ -195,9 +257,15 @@ solede_openbanking/
 │   │   ├── openbanking_account/
 │   │   │   ├── openbanking_account.json
 │   │   │   └── openbanking_account.py
-│   │   └── acube_transaction_log/
-│   │       ├── acube_transaction_log.json
-│   │       └── acube_transaction_log.py
+│   │   ├── openbanking_payment/
+│   │   │   ├── openbanking_payment.json
+│   │   │   └── openbanking_payment.py
+│   │   ├── acube_transaction_log/
+│   │   │   ├── acube_transaction_log.json
+│   │   │   └── acube_transaction_log.py
+│   │   └── acube_webhook_log/
+│   │       ├── acube_webhook_log.json
+│   │       └── acube_webhook_log.py
 │   ├── report/
 │   │   └── authorized_bank_accounts/
 │   │       ├── authorized_bank_accounts.json
@@ -207,7 +275,14 @@ solede_openbanking/
 │           └── openbanking.json
 ├── public/
 │   └── js/
-│       └── openbanking_helpers.js  # Helper JavaScript
+│       ├── openbanking_helpers.js  # Helper JavaScript
+│       ├── purchase_invoice.js     # Client-side pagamenti Purchase Invoice
+│       ├── supplier.js             # Validazione IBAN fornitore
+│       └── bank_transaction.js     # Arricchimento transazioni
+├── templates/
+│   └── pages/
+│       ├── payment_callback.py     # Callback page pagamenti
+│       └── payment_callback.html   # Template callback
 ├── fixtures/                       # Custom fields e configurazioni
 ├── hooks.py
 └── README.md
@@ -238,6 +313,18 @@ solede_openbanking/
 | Endpoint | Method | Descrizione |
 |----------|--------|-------------|
 | `/business-registry/{fiscalId}/transactions` | GET | Recupera transazioni |
+
+### Pagamenti
+| Endpoint | Method | Descrizione |
+|----------|--------|-------------|
+| `/payments/send/sepa` | POST | Invia bonifico SEPA |
+| `/payments/send/sepa-instant` | POST | Invia bonifico SEPA Instant |
+| `/payments/{uuid}` | GET | Recupera status pagamento |
+
+### Webhook
+| Endpoint | Method | Descrizione |
+|----------|--------|-------------|
+| `/api/method/solede_openbanking.api.webhooks.acube_webhook` | POST | Riceve webhook da ACube |
 
 ## 🔐 Sicurezza
 
@@ -270,6 +357,8 @@ Configurazione principale per ogni Company.
 - `access_token` (Long Text): Token JWT corrente
 - `token_created_at` (Datetime): Data creazione token
 - `token_expires_at` (Datetime): Data scadenza token
+- `callback_base_url` (Data): URL base per callback pagamenti
+- `payment_mode_of_payment` (Link): Mode of Payment per Payment Entry automatici
 - `accounts` (Table): Child table con account autorizzati
 
 ### OpenBanking Account (Child Table)
@@ -281,7 +370,30 @@ Account bancari autorizzati.
 - `bank_display` (Data): Nome banca
 - `balance_display` (Data): Saldo formattato
 - `enabled` (Check): Stato attivo/disattivo
-- `raw_data` (Long Text): JSON completo da API
+- `raw_data` (Long Text): JSON completo da API (include campo "systems" con capabilities pagamenti)
+
+### OpenBanking Payment (DocType)
+Tracciamento pagamenti SEPA.
+
+**Campi principali:**
+- `uuid` (Data): UUID pagamento da ACube
+- `payment_direction` (Select): outbound/inbound
+- `status` (Select): pending/requested/processing/completed/failed/cancelled
+- `system` (Select): sepa/sepa-instant
+- `amount` (Currency): Importo pagamento
+- `currency_code` (Data): Valuta (default EUR)
+- `description` (Small Text): Descrizione pagamento
+- `reference_doctype` (Link): DocType di riferimento (es. Purchase Invoice)
+- `reference_name` (Dynamic Link): Nome documento di riferimento
+- `company` (Link): Company
+- `supplier` (Link): Fornitore
+- `creditor_name` (Data): Nome beneficiario
+- `creditor_iban` (Data): IBAN beneficiario
+- `account_uuid` (Data): UUID account OpenBanking debitore
+- `connect_url` (Data): URL autorizzazione pagamento
+- `end_to_end_id` (Data): End-to-End ID transazione
+- `error_message` (Text): Messaggio errore se failed
+- `raw_response` (Code): Risposta completa API JSON
 
 ### ACube Transaction Log (DocType)
 Log di tutte le transazioni importate.
@@ -352,6 +464,43 @@ import_transactions(company, account_uuid, from_date, to_date)
 # Importa transazioni in Bank Transaction
 ```
 
+### payments.py
+
+```python
+get_supplier_bank_accounts(supplier_name)
+# Recupera Bank Account del fornitore
+
+get_company_openbanking_accounts(company)
+# Recupera account OpenBanking con capabilities pagamenti
+
+initiate_sepa_payment(reference_doctype, reference_name, account_uuid,
+                     creditor_iban, creditor_name, use_instant)
+# Avvia pagamento SEPA/SEPA Instant
+# Valida IBAN paese SEPA e capabilities account
+
+get_payment_status(payment_uuid)
+# Aggiorna status pagamento da API
+
+create_or_get_supplier_bank_account(supplier_name, iban, account_name)
+# Crea/recupera Bank Account fornitore da IBAN
+```
+
+### webhooks.py
+
+```python
+acube_webhook()
+# Endpoint pubblico per ricevere webhook ACube
+# Gestisce eventi: connect, reconnect, payment
+
+handle_payment_webhook(payload, company, log_name)
+# Gestisce webhook pagamento
+# Crea automaticamente Payment Entry se completed
+
+create_payment_entry_from_payment(payment_doc)
+# Crea Payment Entry da OpenBanking Payment
+# Usa Mode of Payment da settings
+```
+
 ### client.py
 
 ```python
@@ -399,6 +548,23 @@ class ACubeAPIClient:
 - Verifica che la valuta della transazione corrisponda a quella del Bank Account
 - Controlla ACube Transaction Log per vedere errori specifici
 
+### Pagamento SEPA non funziona
+- Verifica che l'account OpenBanking supporti pagamenti (campo "systems" in raw_data)
+- Controlla che l'IBAN destinatario sia di un paese SEPA
+- Per SEPA Instant: importo massimo €100.000
+- Verifica che `callback_base_url` sia configurato e raggiungibile pubblicamente
+- In sandbox: importo massimo €10
+
+### Payment Entry non viene creato automaticamente
+- Verifica che `payment_mode_of_payment` sia configurato in OpenBanking Settings
+- Controlla ACube Webhook Log per verificare ricezione webhook
+- Controlla Error Log per eccezioni durante creazione Payment Entry
+- Verifica che Purchase Invoice abbia ancora outstanding_amount > 0
+
+### Errore "Not allowed to change Mode of Payment after submission"
+- Assicurati di aver configurato `payment_mode_of_payment` in OpenBanking Settings prima di testare
+- Il Mode of Payment deve essere impostato PRIMA del submit del Payment Entry
+
 ## 🤝 Contributing
 
 I contributi sono benvenuti! Per contribuire:
@@ -437,7 +603,18 @@ Usa [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## 📝 Changelog
 
-### v1.0.0 (TBD)
+### v1.1.0 (Current)
+- ✨ **Pagamenti SEPA** - Bonifici SEPA da Purchase Invoice
+- ✨ **SEPA Instant** - Supporto bonifici istantanei
+- ✨ **IBAN Enrichment** - Creazione automatica Bank/Bank Account da IBAN
+- ✨ **Validazione SEPA** - Controllo paese IBAN per bonifici SEPA
+- ✨ **Payment Entry Automatico** - Creazione automatica da webhook
+- ✨ **Callback Page** - Pagina ritorno dopo autorizzazione
+- ✨ **Mode of Payment Configurabile** - Per ogni company
+- ✨ **Webhook Management** - Gestione completa webhook ACube
+- ✨ **NO FALLBACK** - Errori sempre mostrati all'utente
+
+### v1.0.0
 - ✨ Gestione completa Business Registry
 - ✨ Connessione multi-account bancari
 - ✨ Import transazioni con riconciliazione
