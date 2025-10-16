@@ -13,6 +13,10 @@
   "column_break_credentials",
   "email",
   "password",
+  "section_break_iban_api",
+  "iban_api_provider",
+  "column_break_iban",
+  "iban_api_key",
   "section_break_business_registry",
   "business_registry_created",
   "accounts_tab",
@@ -74,6 +78,28 @@
    "fieldtype": "Password",
    "label": "Password",
    "reqd": 1
+  },
+  {
+   "fieldname": "section_break_iban_api",
+   "fieldtype": "Section Break",
+   "label": "IBAN Validation API"
+  },
+  {
+   "description": "Scegli il provider API per la validazione IBAN e l'arricchimento dei dati bancari",
+   "fieldname": "iban_api_provider",
+   "fieldtype": "Select",
+   "label": "IBAN API Provider",
+   "options": "\niban.com\nibanapi.com\napi-ninjas"
+  },
+  {
+   "fieldname": "column_break_iban",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "API Key per il provider selezionato. Registrati su iban.com, ibanapi.com o api-ninjas.com per ottenere una chiave",
+   "fieldname": "iban_api_key",
+   "fieldtype": "Password",
+   "label": "IBAN API Key"
   },
   {
    "fieldname": "section_break_business_registry",
