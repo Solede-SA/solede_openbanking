@@ -3,11 +3,14 @@
 
 frappe.ui.form.on('Purchase Invoice', {
 	refresh: function(frm) {
-		// Mostra bottone solo se documento è submitted e non completamente pagato
-		if (frm.doc.docstatus === 1 && frm.doc.outstanding_amount > 0) {
+		// Mostra bottone solo se:
+		// 1. Documento è submitted
+		// 2. C'è ancora un outstanding_amount
+		// 3. NON esiste già un pagamento OpenBanking in corso
+		if (frm.doc.docstatus === 1 && frm.doc.outstanding_amount > 0 && !frm.doc.openbanking_payment) {
 			frm.add_custom_button(__('Esegui Bonifico'), function() {
 				initiate_payment_flow(frm);
-			}, __('Azioni'));
+			}, __('OpenBanking'));
 		}
 
 		// Mostra status pagamento se esiste
@@ -375,7 +378,7 @@ function show_payment_status(frm) {
 				// Bottone per refresh status
 				frm.add_custom_button(__('Aggiorna Status Pagamento'), function() {
 					refresh_payment_status(frm, r.message.uuid);
-				}, __('Azioni'));
+				}, __('OpenBanking'));
 			}
 		}
 	});

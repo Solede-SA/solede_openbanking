@@ -8,6 +8,70 @@ from solede_openbanking.api.client import ACubeAPIClient
 from solede_openbanking.api.iban_enrichment import create_bank_and_account_from_iban
 
 
+# Lista paesi SEPA (Single Euro Payments Area)
+SEPA_COUNTRIES = {
+	"AT", "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "ES", "FI",
+	"FR", "GB", "GR", "HR", "HU", "IE", "IS", "IT", "LI", "LT",
+	"LU", "LV", "MC", "MT", "NL", "NO", "PL", "PT", "RO", "SE",
+	"SI", "SK", "SM"
+}
+
+
+def is_sepa_country(iban):
+	"""
+	Verifica se un IBAN appartiene a un paese dell'area SEPA.
+
+	Args:
+		iban: IBAN da verificare (es. "IT60X0542811101000000123456")
+
+	Returns:
+		bool: True se il paese è SEPA, False altrimenti
+	"""
+	if not iban or len(iban) < 2:
+		return False
+
+	country_code = iban[:2].upper()
+	return country_code in SEPA_COUNTRIES
+
+
+def parse_payment_systems(systems_array):
+	"""
+	Analizza l'array systems dall'API e determina le capabilities di pagamento.
+	DRY: Funzione riutilizzabile per evitare duplicazione.
+
+	Args:
+		systems_array: Array di stringhe systems dall'API (es. ["sepa", "sepa_instant"])
+
+	Returns:
+		dict: {
+			"has_sepa": bool,
+			"has_sepa_instant": bool
+		}
+	"""
+	has_sepa = False
+	has_sepa_instant = False
+
+	for system in systems_array:
+		if not isinstance(system, str):
+			continue
+
+		# Normalizza underscore e trattini per gestire sia "sepa_instant" che "sepa-instant"
+		system_normalized = system.lower().replace("_", "-")
+
+		# Verifica SEPA Instant
+		if "instant" in system_normalized or "sepa-instant" in system_normalized:
+			has_sepa_instant = True
+
+		# Verifica SEPA standard
+		if "sepa" in system_normalized:
+			has_sepa = True
+
+	return {
+		"has_sepa": has_sepa,
+		"has_sepa_instant": has_sepa_instant
+	}
+
+
 @frappe.whitelist()
 def get_supplier_bank_accounts(supplier_name):
 	"""
@@ -70,21 +134,17 @@ def get_company_openbanking_accounts(company):
 
 			if acc.raw_data:
 				try:
-					import json
 					raw_data = json.loads(acc.raw_data)
 
 					# Verifica campo "systems" per capabilities pagamenti
 					if "systems" in raw_data:
 						systems = raw_data.get("systems", [])
-						if systems:  # Solo se array non vuoto
-							for system in systems:
-								system_lower = system.lower() if isinstance(system, str) else ""
-								if "sepa-instant" in system_lower or "instant" in system_lower:
-									capabilities["sepa_instant"] = True
-									has_payment_support = True
-								elif "sepa" in system_lower:
-									capabilities["sepa"] = True
-									has_payment_support = True
+						if systems:
+							# DRY: Usa funzione centralizzata
+							parsed = parse_payment_systems(systems)
+							capabilities["sepa"] = parsed["has_sepa"]
+							capabilities["sepa_instant"] = parsed["has_sepa_instant"]
+							has_payment_support = parsed["has_sepa"] or parsed["has_sepa_instant"]
 
 				except Exception as e:
 					frappe.log_error(f"Error parsing account capabilities: {str(e)}", "Account Capabilities Error")
@@ -152,8 +212,25 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 	if use_instant and amount > 100000:
 		frappe.throw(_("SEPA Instant payments cannot exceed 100,000 EUR"))
 
+	# Valida creditor_name
+	if not creditor_name:
+		frappe.throw(_("Creditor name is required"))
+
 	# Pulisci IBAN
 	creditor_iban_clean = creditor_iban.replace(" ", "").upper()
+
+	# Valida che l'IBAN sia di un paese SEPA
+	if not is_sepa_country(creditor_iban_clean):
+		country_code = creditor_iban_clean[:2] if len(creditor_iban_clean) >= 2 else "??"
+		frappe.throw(_(
+			"L'IBAN fornito ({0}) appartiene al paese {1} che non fa parte dell'area SEPA. "
+			"I bonifici SEPA sono supportati solo per i seguenti paesi: "
+			"Austria, Belgio, Bulgaria, Cipro, Croazia, Danimarca, Estonia, Finlandia, Francia, "
+			"Germania, Grecia, Irlanda, Islanda, Italia, Lettonia, Liechtenstein, Lituania, "
+			"Lussemburgo, Malta, Monaco, Norvegia, Paesi Bassi, Polonia, Portogallo, "
+			"Repubblica Ceca, Romania, San Marino, Slovacchia, Slovenia, Spagna, Svezia, Ungheria, UK. "
+			"Per pagamenti internazionali verso altri paesi, utilizza un bonifico SWIFT."
+		).format(creditor_iban_clean[:10] + "...", country_code))
 
 	# Determina sistema
 	system = "sepa-instant" if use_instant else "sepa"
@@ -177,8 +254,6 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 					# Verifica campo "systems" per capabilities pagamenti
 					if "systems" in raw_data:
 						systems = raw_data.get("systems", [])
-						has_sepa = False
-						has_sepa_instant = False
 
 						# Log systems disponibili
 						frappe.log_error(
@@ -195,12 +270,10 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 								"Seleziona un account con supporto pagamenti abilitato."
 							))
 
-						for system in systems:
-							system_lower = system.lower() if isinstance(system, str) else ""
-							if "sepa-instant" in system_lower or "instant" in system_lower:
-								has_sepa_instant = True
-							elif "sepa" in system_lower:
-								has_sepa = True
+						# DRY: Usa funzione centralizzata
+						parsed = parse_payment_systems(systems)
+						has_sepa = parsed["has_sepa"]
+						has_sepa_instant = parsed["has_sepa_instant"]
 
 						# Verifica se l'account supporta il sistema richiesto
 						if use_instant and not has_sepa_instant:
@@ -235,6 +308,10 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 	if not account_found:
 		frappe.throw(_("Account OpenBanking non trovato: {0}").format(account_uuid))
 
+	# Valida callback_base_url (DRY: riutilizzo settings già caricato)
+	if not settings.callback_base_url:
+		frappe.throw(_("Callback Base URL non configurato in OpenBanking Settings"))
+
 	# Prepara descrizione
 	description = f"{reference_doctype} {reference_name}"
 	if hasattr(ref_doc, "title"):
@@ -243,10 +320,10 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 	# Crea client API
 	client = ACubeAPIClient(company)
 
-	# Prepara return URL e error URL
-	site_url = frappe.utils.get_url()
-	return_url = f"{site_url}/payment-callback"
-	error_url = f"{site_url}/payment-callback"
+	# Prepara return URL e error URL da settings (DRY: riutilizzo settings già caricato)
+	callback_base_url = settings.callback_base_url.rstrip('/')
+	return_url = f"{callback_base_url}/payment_callback"
+	error_url = f"{callback_base_url}/payment_callback"
 
 	# Prepara payload
 	payload = {
@@ -255,7 +332,7 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 		"description": description[:1000],  # Max 1000 chars
 		"accountUuid": account_uuid,
 		"creditorIban": creditor_iban_clean,
-		"creditorName": creditor_name or "Supplier",
+		"creditorName": creditor_name,
 		"returnUrl": return_url,
 		"errorUrl": error_url
 	}

@@ -469,6 +469,11 @@ def create_payment_entry_from_payment(payment_doc):
 		frappe.logger().info(f"Purchase Invoice {purchase_invoice.name} already paid")
 		return
 
+	# Recupera Mode of Payment da settings
+	settings = frappe.get_doc("OpenBanking Settings", payment_doc.company)
+	if not settings.payment_mode_of_payment:
+		frappe.throw(_("Mode of Payment non configurato in OpenBanking Settings per company {0}").format(payment_doc.company))
+
 	# Crea Payment Entry
 	from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 
@@ -480,6 +485,7 @@ def create_payment_entry_from_payment(payment_doc):
 	payment_entry.reference_no = payment_doc.end_to_end_id or payment_doc.uuid
 	payment_entry.reference_date = frappe.utils.today()
 	payment_entry.remarks = f"Bonifico SEPA via Open Banking - {payment_doc.description}"
+	payment_entry.mode_of_payment = settings.payment_mode_of_payment
 
 	# Collega OpenBanking Payment
 	payment_entry.custom_openbanking_payment = payment_doc.name

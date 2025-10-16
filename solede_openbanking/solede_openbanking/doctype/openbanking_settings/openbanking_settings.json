@@ -10,9 +10,12 @@
   "section_break_api",
   "api_url",
   "openbanking_api_url",
+  "callback_base_url",
   "column_break_credentials",
   "email",
   "password",
+  "section_break_payment",
+  "payment_mode_of_payment",
   "section_break_iban_api",
   "iban_api_provider",
   "column_break_iban",
@@ -64,6 +67,13 @@
    "reqd": 1
   },
   {
+   "description": "Base URL for payment callbacks (e.g., https://cbm.ngrok.io for test or https://yoursite.com for production)",
+   "fieldname": "callback_base_url",
+   "fieldtype": "Data",
+   "label": "Callback Base URL",
+   "reqd": 1
+  },
+  {
    "fieldname": "column_break_credentials",
    "fieldtype": "Column Break"
   },
@@ -77,6 +87,19 @@
    "fieldname": "password",
    "fieldtype": "Password",
    "label": "Password",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_payment",
+   "fieldtype": "Section Break",
+   "label": "Payment Configuration"
+  },
+  {
+   "description": "Mode of Payment to use when creating automatic Payment Entries from completed payments",
+   "fieldname": "payment_mode_of_payment",
+   "fieldtype": "Link",
+   "label": "Mode of Payment",
+   "options": "Mode of Payment",
    "reqd": 1
   },
   {

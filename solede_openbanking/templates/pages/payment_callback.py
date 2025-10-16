@@ -9,12 +9,11 @@ def get_context(context):
 	"""
 	Pagina di callback per il ritorno dal flusso di pagamento Open Banking.
 	"""
-	# Verifica autenticazione
-	if frappe.session.user == "Guest":
-		frappe.throw(_("Devi essere autenticato per accedere a questa pagina"))
+	# Non richiediamo autenticazione per questa pagina perché viene chiamata da ACube
+	# e potrebbe non avere la sessione dell'utente
 
-	# Ottieni parametri dalla query string
-	payment_uuid = frappe.form_dict.get("payment_uuid")
+	# Ottieni parametri dalla query string (supporta sia payment_uuid che payment_id)
+	payment_uuid = frappe.form_dict.get("payment_uuid") or frappe.form_dict.get("payment_id")
 
 	if not payment_uuid:
 		context.error = True
@@ -33,10 +32,6 @@ def get_context(context):
 
 	try:
 		payment_doc = frappe.get_doc("OpenBanking Payment", payment_name)
-
-		# Verifica permessi
-		if not frappe.has_permission("OpenBanking Payment", "read", payment_doc):
-			frappe.throw(_("Non hai i permessi per visualizzare questo pagamento"))
 
 		context.payment = payment_doc
 		context.title = _("Pagamento in elaborazione")
