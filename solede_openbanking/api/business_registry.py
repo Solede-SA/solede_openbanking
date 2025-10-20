@@ -419,6 +419,29 @@ def get_transactions(company, account_uuid=None, from_date=None, to_date=None, p
 		raise
 
 
+def extract_unique_transaction_id(transaction_data):
+	"""
+	Estrae l'ID univoco della transazione dal campo extra.id.
+	Se extra.id non esiste, usa transactionId come fallback.
+
+	Args:
+		transaction_data: Dati transazione da API
+
+	Returns:
+		ID univoco della transazione
+	"""
+	extra = transaction_data.get("extra", {})
+	unique_id = extra.get("id")
+
+	if not unique_id:
+		unique_id = transaction_data.get("transactionId")
+
+	if not unique_id:
+		frappe.throw(_("Transaction ID not found in transaction data"))
+
+	return unique_id
+
+
 def parse_date(date_string):
 	"""
 	Converte una stringa data in formato MySQL date.
@@ -547,61 +570,63 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 			for txn in transactions:
 				log_entry = None
 				try:
-					transaction_id = txn.get("transactionId")
+					unique_id = extract_unique_transaction_id(txn)
 					transaction_currency = txn.get("currencyCode")
 
-					# 1. Controlla se esiste già il Bank Transaction
-					existing_bank_txn = frappe.db.exists(
-						"Bank Transaction",
-						{"acube_transaction_id": transaction_id}
-					)
-
-					if existing_bank_txn:
-						print(f"DEBUG - Transaction {transaction_id} already exists in Bank Transaction, skipping")
-						skipped_count += 1
-						skip_reasons["already_imported"] += 1
-						continue
-
-					# 2. Controlla se esiste già il log
-					existing_log = frappe.db.exists(
-						"ACube Transaction Log",
-						{"acube_transaction_id": transaction_id}
-					)
-
-					if existing_log:
-						print(f"DEBUG - Transaction {transaction_id} already exists in ACube Transaction Log, skipping")
-						skipped_count += 1
-						skip_reasons["already_imported"] += 1
-						continue
-
-					# 3. Verifica che la valuta esista in ERPNext
+					# 1. Verifica che la valuta esista in ERPNext
 					if not frappe.db.exists("Currency", transaction_currency):
-						print(f"WARNING - Currency {transaction_currency} not configured in ERPNext, skipping transaction {transaction_id}")
+						print(f"WARNING - Currency {transaction_currency} not configured in ERPNext, skipping transaction {unique_id}")
 						skipped_count += 1
 						skip_reasons["currency_not_found"] += 1
 						continue
 
-					# 4. Ottieni la valuta del Bank Account tramite il Company Account collegato
+					# 2. Ottieni la valuta del Bank Account tramite il Company Account collegato
 					if bank_account:
 						company_account = frappe.db.get_value("Bank Account", bank_account, "account")
 						if company_account:
 							bank_account_currency = frappe.db.get_value("Account", company_account, "account_currency")
 
 							if bank_account_currency and transaction_currency != bank_account_currency:
-								print(f"WARNING - Transaction {transaction_id} currency {transaction_currency} does not match Bank Account currency {bank_account_currency}, skipping")
+								print(f"WARNING - Transaction {unique_id} currency {transaction_currency} does not match Bank Account currency {bank_account_currency}, skipping")
 								skipped_count += 1
 								skip_reasons["currency_mismatch"] += 1
 								continue
 
-					# 5. Crea il log della transazione
-					log_entry = create_transaction_log(
-						company=company,
-						account_uuid=acc_uuid,
-						transaction_data=txn,
-						bank_account=bank_account
+					# 3. Controlla se esiste già un log per questo ID univoco
+					existing_log_name = frappe.db.exists(
+						"ACube Transaction Log",
+						{"acube_transaction_id": unique_id}
 					)
 
-					# Crea Bank Transaction
+					if existing_log_name:
+						# Log già esistente, recuperalo e aggiornalo come Duplicate
+						log_entry = frappe.get_doc("ACube Transaction Log", existing_log_name)
+						frappe.db.set_value("ACube Transaction Log", log_entry.name, "import_status", "Duplicate")
+						frappe.db.set_value("ACube Transaction Log", log_entry.name, "sync_date", frappe.utils.now())
+						print(f"DEBUG - Transaction {unique_id} already logged, updated as Duplicate")
+					else:
+						# Log non esiste, crealo
+						log_entry = create_transaction_log(
+							company=company,
+							account_uuid=acc_uuid,
+							transaction_data=txn,
+							bank_account=bank_account
+						)
+
+					# 4. Controlla se esiste già il Bank Transaction con questo ID univoco
+					existing_bank_txn = frappe.db.exists(
+						"Bank Transaction",
+						{"acube_transaction_id": unique_id}
+					)
+
+					if existing_bank_txn:
+						print(f"DEBUG - Transaction {unique_id} already exists in Bank Transaction, skipping import")
+						frappe.db.set_value("ACube Transaction Log", log_entry.name, "bank_transaction", existing_bank_txn)
+						skipped_count += 1
+						skip_reasons["already_imported"] += 1
+						continue
+
+					# 5. Crea Bank Transaction
 					bank_txn = create_bank_transaction_from_acube(
 						company=company,
 						bank_account=bank_account,
@@ -610,7 +635,7 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 						transaction_log=log_entry.name
 					)
 
-					# Aggiorna log con successo
+					# 6. Aggiorna log con successo
 					frappe.db.set_value("ACube Transaction Log", log_entry.name, "import_status", "Imported")
 					frappe.db.set_value("ACube Transaction Log", log_entry.name, "bank_transaction", bank_txn.name)
 
@@ -682,13 +707,15 @@ def create_transaction_log(company, account_uuid, transaction_data, bank_account
 	Returns:
 		ACube Transaction Log document
 	"""
+	unique_id = extract_unique_transaction_id(transaction_data)
+
 	log = frappe.get_doc({
 		"doctype": "ACube Transaction Log",
 		"company": company,
 		"bank_account": bank_account,
 		"acube_account_uuid": account_uuid,
 		"transaction_date": parse_date(transaction_data.get("madeOn")),
-		"acube_transaction_id": transaction_data.get("transactionId"),
+		"acube_transaction_id": unique_id,
 		"transaction_status": transaction_data.get("status"),
 		"amount": abs(float(transaction_data.get("amount", 0))),
 		"currency": transaction_data.get("currencyCode"),
@@ -713,6 +740,7 @@ def create_bank_transaction_from_acube(company, bank_account, account_info, tran
 	Returns:
 		Bank Transaction document
 	"""
+	unique_id = extract_unique_transaction_id(transaction_data)
 	amount = float(transaction_data.get("amount", 0))
 
 	# Determina deposit/withdrawal
@@ -730,11 +758,11 @@ def create_bank_transaction_from_acube(company, bank_account, account_info, tran
 		"withdrawal": withdrawal,
 		"currency": transaction_data.get("currencyCode"),
 		"description": transaction_data.get("description", "")[:140],
-		"reference_number": transaction_data.get("transactionId"),
-		"transaction_id": transaction_data.get("transactionId"),
+		"reference_number": unique_id,
+		"transaction_id": unique_id,
 		# Custom fields ACube
 		"acube_transaction_log": transaction_log,
-		"acube_transaction_id": transaction_data.get("transactionId"),
+		"acube_transaction_id": unique_id,
 		"api_source": "ACube",
 		"acube_booking_date": parse_date(transaction_data.get("madeOn")),
 		"acube_value_date": parse_date(transaction_data.get("madeOn")),
