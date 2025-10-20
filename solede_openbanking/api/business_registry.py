@@ -601,9 +601,18 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 					if existing_log_name:
 						# Log già esistente, recuperalo e aggiornalo come Duplicate
 						log_entry = frappe.get_doc("ACube Transaction Log", existing_log_name)
+
+						# Aggiungi una nuova reception alla child table
+						log_entry.append("receptions", {
+							"reception_date": frappe.utils.now(),
+							"raw_data": json.dumps(txn, indent=2)
+						})
+						log_entry.save(ignore_permissions=True)
+
+						# Aggiorna status e sync_date
 						frappe.db.set_value("ACube Transaction Log", log_entry.name, "import_status", "Duplicate")
 						frappe.db.set_value("ACube Transaction Log", log_entry.name, "sync_date", frappe.utils.now())
-						print(f"DEBUG - Transaction {unique_id} already logged, updated as Duplicate")
+						print(f"DEBUG - Transaction {unique_id} already logged, updated as Duplicate and added reception")
 					else:
 						# Log non esiste, crealo
 						log_entry = create_transaction_log(

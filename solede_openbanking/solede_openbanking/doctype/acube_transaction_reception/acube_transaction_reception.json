@@ -1,0 +1,41 @@
+{
+ "actions": [],
+ "creation": "2025-01-20 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "reception_date",
+  "raw_data"
+ ],
+ "fields": [
+  {
+   "fieldname": "reception_date",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Reception Date",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "raw_data",
+   "fieldtype": "JSON",
+   "in_list_view": 1,
+   "label": "Raw API Data",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-01-20 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Solede Openbanking",
+ "name": "ACube Transaction Reception",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

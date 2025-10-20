@@ -23,7 +23,9 @@
   "import_status",
   "error_message",
   "section_break_13",
-  "raw_data"
+  "raw_data",
+  "section_break_14",
+  "receptions"
  ],
  "fields": [
   {
@@ -138,6 +140,17 @@
    "fieldname": "raw_data",
    "fieldtype": "JSON",
    "label": "Raw API Data"
+  },
+  {
+   "fieldname": "section_break_14",
+   "fieldtype": "Section Break",
+   "label": "Receptions History"
+  },
+  {
+   "fieldname": "receptions",
+   "fieldtype": "Table",
+   "label": "Receptions",
+   "options": "ACube Transaction Reception"
   }
  ],
  "index_web_pages_for_search": 1,
