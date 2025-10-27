@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2025-01-26
+
+### Added
+- GitHub Actions workflow for automated release creation
+- GitHub Actions workflow for code linting (Python and JavaScript)
+- Documentation for GitHub workflows in .github/README.md
+
+### Changed
+- Automated release process - future releases will be created automatically when pushing tags
+
+### Fixed
+- Improved release automation workflow
+
 ## [1.0.0] - 2025-01-26
 
 ### Added
@@ -74,4 +87,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No fallback: errori sempre espliciti
 - Type annotations Python
 
+[1.0.1]: https://github.com/Solede-SA/solede_openbanking/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Solede-SA/solede_openbanking/releases/tag/v1.0.0
