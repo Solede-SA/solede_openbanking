@@ -1,9 +1,11 @@
 # Copyright (c) 2025, Solede and contributors
 # For license information, please see license.txt
 
-import frappe
 from datetime import datetime, timedelta
+
+import frappe
 from frappe import _
+
 from solede_openbanking.api.business_registry import get_accounts, import_transactions
 
 
@@ -20,9 +22,7 @@ def sync_all_openbanking_data():
 
 	# Ottieni tutte le settings con business registry creato
 	settings_list = frappe.get_all(
-		"OpenBanking Settings",
-		filters={"business_registry_created": 1},
-		fields=["name", "company"]
+		"OpenBanking Settings", filters={"business_registry_created": 1}, fields=["name", "company"]
 	)
 
 	if not settings_list:
@@ -45,15 +45,11 @@ def sync_all_openbanking_data():
 				frappe.logger().info(f"Updated {accounts_result.get('count', 0)} accounts for {company}")
 
 			# 2. Importa le transazioni degli ultimi 7 giorni
-			to_date = datetime.now().strftime('%Y-%m-%d')
-			from_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+			to_date = datetime.now().strftime("%Y-%m-%d")
+			from_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
 
 			frappe.logger().info(f"Importing transactions for {company} from {from_date} to {to_date}")
-			import_result = import_transactions(
-				company=company,
-				from_date=from_date,
-				to_date=to_date
-			)
+			import_result = import_transactions(company=company, from_date=from_date, to_date=to_date)
 
 			if import_result.get("success"):
 				frappe.logger().info(
@@ -67,12 +63,7 @@ def sync_all_openbanking_data():
 			error_count += 1
 			error_msg = str(e)
 			frappe.logger().error(f"Error syncing OpenBanking data for {company}: {error_msg}")
-			frappe.log_error(
-				f"Company: {company}\nError: {error_msg}",
-				"OpenBanking Sync Error"
-			)
+			frappe.log_error(f"Company: {company}\nError: {error_msg}", "OpenBanking Sync Error")
 			continue
 
-	frappe.logger().info(
-		f"OpenBanking sync completed: {success_count} success, {error_count} errors"
-	)
+	frappe.logger().info(f"OpenBanking sync completed: {success_count} success, {error_count} errors")

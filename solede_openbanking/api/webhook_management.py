@@ -3,6 +3,7 @@
 
 import frappe
 from frappe import _
+
 from solede_openbanking.api.client import ACubeAPIClient
 
 
@@ -35,32 +36,28 @@ def configure_all_webhooks(company):
 		for webhook_row in settings.webhooks:
 			# Salta se già configurato
 			if webhook_row.webhook_uuid and webhook_row.configured:
-				frappe.logger().info(f"Webhook {webhook_row.event} già configurato con UUID {webhook_row.webhook_uuid}, salto")
+				frappe.logger().info(
+					f"Webhook {webhook_row.event} già configurato con UUID {webhook_row.webhook_uuid}, salto"
+				)
 				continue
 
 			event = webhook_row.event
 			target_url = webhook_row.target_url or settings.webhook_base_url
 
 			# Prepara payload per creare webhook
-			payload = {
-				"event": event,
-				"targetUrl": target_url
-			}
+			payload = {"event": event, "targetUrl": target_url}
 
 			# Aggiungi autenticazione opzionale
 			if webhook_row.authentication_type:
 				payload["authentication"] = {
 					"type": webhook_row.authentication_type,
 					"key": webhook_row.authentication_key,
-					"token": webhook_row.authentication_token
+					"token": webhook_row.authentication_token,
 				}
 
 			# Crea webhook su ACube
 			response_data = client.post(
-				"webhooks",
-				f"Create Webhook {event}",
-				payload=payload,
-				expected_status_codes=[201]
+				"webhooks", f"Create Webhook {event}", payload=payload, expected_status_codes=[201]
 			)
 
 			webhook_uuid = response_data.get("uuid")
@@ -68,15 +65,11 @@ def configure_all_webhooks(company):
 				frappe.throw(_("UUID webhook non ricevuto per evento {0}").format(event))
 
 			# Salva UUID nella child table
-			frappe.db.set_value("OpenBanking Webhook", webhook_row.name, {
-				"webhook_uuid": webhook_uuid,
-				"configured": 1
-			})
+			frappe.db.set_value(
+				"OpenBanking Webhook", webhook_row.name, {"webhook_uuid": webhook_uuid, "configured": 1}
+			)
 
-			configured_webhooks.append({
-				"event": event,
-				"uuid": webhook_uuid
-			})
+			configured_webhooks.append({"event": event, "uuid": webhook_uuid})
 
 			frappe.logger().info(f"Webhook {event} configured with UUID {webhook_uuid}")
 
@@ -90,21 +83,29 @@ def configure_all_webhooks(company):
 				client.delete(
 					f"webhooks/{webhook_info['uuid']}",
 					f"Delete Webhook {webhook_info['event']} (rollback)",
-					expected_status_codes=[204]
+					expected_status_codes=[204],
 				)
-				frappe.logger().info(f"Rolled back webhook {webhook_info['event']} (UUID: {webhook_info['uuid']})")
+				frappe.logger().info(
+					f"Rolled back webhook {webhook_info['event']} (UUID: {webhook_info['uuid']})"
+				)
 			except Exception as rollback_error:
-				frappe.log_error(f"Failed to rollback webhook {webhook_info['uuid']}: {str(rollback_error)}", "Webhook Rollback Error")
+				frappe.log_error(
+					f"Failed to rollback webhook {webhook_info['uuid']}: {rollback_error!s}",
+					"Webhook Rollback Error",
+				)
 
 		# Reset child table
 		for webhook_row in settings.webhooks:
-			frappe.db.set_value("OpenBanking Webhook", webhook_row.name, {
-				"webhook_uuid": None,
-				"configured": 0
-			})
+			frappe.db.set_value(
+				"OpenBanking Webhook", webhook_row.name, {"webhook_uuid": None, "configured": 0}
+			)
 
 		frappe.db.commit()
-		frappe.throw(_("Errore durante la configurazione dei webhook: {0}. Tutti i webhook sono stati rimossi.").format(error_message))
+		frappe.throw(
+			_(
+				"Errore durante la configurazione dei webhook: {0}. Tutti i webhook sono stati rimossi."
+			).format(error_message)
+		)
 
 	frappe.db.commit()
 
@@ -121,11 +122,7 @@ def configure_all_webhooks(company):
 			len(configured_webhooks), already_configured
 		)
 
-	return {
-		"success": True,
-		"message": message,
-		"configured_webhooks": configured_webhooks
-	}
+	return {"success": True, "message": message, "configured_webhooks": configured_webhooks}
 
 
 @frappe.whitelist()
@@ -145,10 +142,7 @@ def sync_webhooks(company):
 
 	try:
 		# Ottieni lista webhook da ACube
-		webhooks_data = client.get(
-			"webhooks",
-			"Get Webhooks"
-		)
+		webhooks_data = client.get("webhooks", "Get Webhooks")
 
 		# Crea mappa UUID -> webhook da ACube
 		acube_webhooks = {wh.get("uuid"): wh for wh in webhooks_data}
@@ -160,17 +154,16 @@ def sync_webhooks(company):
 				frappe.db.set_value("OpenBanking Webhook", webhook_row.name, "configured", 1)
 			else:
 				# Webhook non esiste su ACube - marca come non configurato
-				frappe.db.set_value("OpenBanking Webhook", webhook_row.name, {
-					"webhook_uuid": None,
-					"configured": 0
-				})
+				frappe.db.set_value(
+					"OpenBanking Webhook", webhook_row.name, {"webhook_uuid": None, "configured": 0}
+				)
 
 		frappe.db.commit()
 
 		return {
 			"success": True,
 			"message": _("Sincronizzati {0} webhook").format(len(webhooks_data)),
-			"webhooks": webhooks_data
+			"webhooks": webhooks_data,
 		}
 
 	except Exception as e:
@@ -205,28 +198,31 @@ def remove_all_webhooks(company):
 					client.delete(
 						f"webhooks/{webhook_row.webhook_uuid}",
 						f"Delete Webhook {webhook_row.event}",
-						expected_status_codes=[204]
+						expected_status_codes=[204],
 					)
 
 					# Reset child table row
-					frappe.db.set_value("OpenBanking Webhook", webhook_row.name, {
-						"webhook_uuid": None,
-						"configured": 0
-					})
+					frappe.db.set_value(
+						"OpenBanking Webhook", webhook_row.name, {"webhook_uuid": None, "configured": 0}
+					)
 
 					removed_count += 1
-					frappe.logger().info(f"Removed webhook {webhook_row.event} (UUID: {webhook_row.webhook_uuid})")
+					frappe.logger().info(
+						f"Removed webhook {webhook_row.event} (UUID: {webhook_row.webhook_uuid})"
+					)
 
 				except Exception as e:
 					# Continua con gli altri anche se uno fallisce
-					frappe.log_error(f"Failed to remove webhook {webhook_row.webhook_uuid}: {str(e)}", "Remove Webhook Error")
+					frappe.log_error(
+						f"Failed to remove webhook {webhook_row.webhook_uuid}: {e!s}", "Remove Webhook Error"
+					)
 
 		frappe.db.commit()
 
 		return {
 			"success": True,
 			"message": _("Rimossi {0} webhook").format(removed_count),
-			"removed_count": removed_count
+			"removed_count": removed_count,
 		}
 
 	except Exception as e:
@@ -265,15 +261,12 @@ def test_webhook(company, event):
 
 	try:
 		# Recupera informazioni webhook da ACube
-		response_data = client.get(
-			f"webhooks/{webhook_row.webhook_uuid}",
-			f"Test Webhook {event}"
-		)
+		response_data = client.get(f"webhooks/{webhook_row.webhook_uuid}", f"Test Webhook {event}")
 
 		return {
 			"success": True,
 			"message": _("Test webhook {0} completato").format(event),
-			"test_result": response_data
+			"test_result": response_data,
 		}
 
 	except Exception as e:

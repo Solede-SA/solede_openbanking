@@ -3,354 +3,329 @@
 # License: GNU Affero General Public License v3 or later (AGPLv3+)
 # See https://www.gnu.org/licenses/agpl-3.0.html
 
-import frappe
-import re
 import json
+import re
 from datetime import datetime
+
+import frappe
 from frappe import _
+
 from solede_openbanking.api.client import ACubeAPIClient
 
 
 def format_currency(amount, currency="EUR"):
-    """
-    Formatta un importo come valuta in formato italiano.
+	"""
+	Formatta un importo come valuta in formato italiano.
 
-    Args:
-        amount: Importo da formattare (numero o stringa)
-        currency: Codice valuta (default: EUR)
+	Args:
+	    amount: Importo da formattare (numero o stringa)
+	    currency: Codice valuta (default: EUR)
 
-    Returns:
-        Stringa formattata (es. "1.234,56 EUR")
-    """
-    if amount is None:
-        return "N/A"
+	Returns:
+	    Stringa formattata (es. "1.234,56 EUR")
+	"""
+	if amount is None:
+		return "N/A"
 
-    try:
-        amount_float = float(amount)
-        # Formato italiano: 1.234,56 €
-        formatted = f"{amount_float:,.2f} {currency}".replace(",", "X").replace(".", ",").replace("X", ".")
-        return formatted
-    except (ValueError, TypeError):
-        return str(amount)
+	try:
+		amount_float = float(amount)
+		# Formato italiano: 1.234,56 €
+		formatted = f"{amount_float:,.2f} {currency}".replace(",", "X").replace(".", ",").replace("X", ".")
+		return formatted
+	except (ValueError, TypeError):
+		return str(amount)
 
 
 def parse_iso_datetime(iso_string):
-    """
-    Converte una stringa datetime ISO 8601 (con Z) in formato MySQL.
+	"""
+	Converte una stringa datetime ISO 8601 (con Z) in formato MySQL.
 
-    Args:
-        iso_string: Stringa in formato ISO 8601 (es. "2026-01-11T14:51:05Z")
+	Args:
+	    iso_string: Stringa in formato ISO 8601 (es. "2026-01-11T14:51:05Z")
 
-    Returns:
-        Stringa in formato MySQL (es. "2026-01-11 14:51:05")
-    """
-    if not iso_string:
-        return None
+	Returns:
+	    Stringa in formato MySQL (es. "2026-01-11 14:51:05")
+	"""
+	if not iso_string:
+		return None
 
-    try:
-        # Rimuovi la Z e converti in datetime
-        dt = datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
-        # Restituisci nel formato MySQL
-        return dt.strftime('%Y-%m-%d %H:%M:%S')
-    except Exception as e:
-        frappe.log_error(f"Error parsing datetime: {iso_string}, Error: {str(e)}", "DateTime Parse Error")
-        return None
+	try:
+		# Rimuovi la Z e converti in datetime
+		dt = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
+		# Restituisci nel formato MySQL
+		return dt.strftime("%Y-%m-%d %H:%M:%S")
+	except Exception as e:
+		frappe.log_error(f"Error parsing datetime: {iso_string}, Error: {e!s}", "DateTime Parse Error")
+		return None
 
 
 def format_datetime_display(iso_string):
-    """
-    Converte una stringa datetime ISO 8601 in formato leggibile usando frappe.utils.
+	"""
+	Converte una stringa datetime ISO 8601 in formato leggibile usando frappe.utils.
 
-    Args:
-        iso_string: Stringa in formato ISO 8601 (es. "2026-01-11T14:51:05Z")
+	Args:
+	    iso_string: Stringa in formato ISO 8601 (es. "2026-01-11T14:51:05Z")
 
-    Returns:
-        Stringa formattata secondo le impostazioni dell'utente
-    """
-    if not iso_string:
-        return "N/A"
+	Returns:
+	    Stringa formattata secondo le impostazioni dell'utente
+	"""
+	if not iso_string:
+		return "N/A"
 
-    try:
-        # Converte in formato MySQL usando la funzione esistente
-        mysql_datetime = parse_iso_datetime(iso_string)
-        if not mysql_datetime:
-            return "N/A"
+	try:
+		# Converte in formato MySQL usando la funzione esistente
+		mysql_datetime = parse_iso_datetime(iso_string)
+		if not mysql_datetime:
+			return "N/A"
 
-        # Usa frappe.utils.format_datetime per formattare secondo le preferenze dell'utente
-        return frappe.utils.format_datetime(mysql_datetime)
-    except Exception as e:
-        frappe.log_error(f"Error formatting datetime: {iso_string}, Error: {str(e)}", "DateTime Format Error")
-        return "N/A"
+		# Usa frappe.utils.format_datetime per formattare secondo le preferenze dell'utente
+		return frappe.utils.format_datetime(mysql_datetime)
+	except Exception as e:
+		frappe.log_error(f"Error formatting datetime: {iso_string}, Error: {e!s}", "DateTime Format Error")
+		return "N/A"
 
 
 def validate_password(password):
-    """
-    Valida che la password rispetti i requisiti:
-    - Almeno 1 carattere maiuscolo
-    - Almeno 1 carattere minuscolo
-    - Almeno 1 numero
-    - Almeno 1 carattere speciale (!@#$%^&*()_+-=[]{}|;:,.<>?)
-    """
-    pattern = r'^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[!@#$%^&*()_+\-=\[\]{}|;:,.<>?])'
+	"""
+	Valida che la password rispetti i requisiti:
+	- Almeno 1 carattere maiuscolo
+	- Almeno 1 carattere minuscolo
+	- Almeno 1 numero
+	- Almeno 1 carattere speciale (!@#$%^&*()_+-=[]{}|;:,.<>?)
+	"""
+	pattern = r"^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[!@#$%^&*()_+\-=\[\]{}|;:,.<>?])"
 
-    if not re.search(pattern, password):
-        frappe.throw(_("Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character"))
+	if not re.search(pattern, password):
+		frappe.throw(
+			_(
+				"Password must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character"
+			)
+		)
 
-    return True
+	return True
 
 
 @frappe.whitelist()
 def create_business_registry(company, password):
-    """
-    Crea un nuovo Business Registry per l'azienda specificata.
-    Nota: questa operazione comporta un addebito.
+	"""
+	Crea un nuovo Business Registry per l'azienda specificata.
+	Nota: questa operazione comporta un addebito.
 
-    Args:
-        company: Nome della company
-        password: Password per il nuovo account Business Registry (non usata in questa versione)
-    """
-    client = ACubeAPIClient(company)
+	Args:
+	    company: Nome della company
+	    password: Password per il nuovo account Business Registry (non usata in questa versione)
+	"""
+	client = ACubeAPIClient(company)
 
-    if not client.company_doc.company_name:
-        frappe.throw(_("Company name not found in Company {0}").format(company))
+	if not client.company_doc.company_name:
+		frappe.throw(_("Company name not found in Company {0}").format(company))
 
-    if not client.settings.email:
-        frappe.throw(_("Email not configured in OpenBanking Settings"))
+	if not client.settings.email:
+		frappe.throw(_("Email not configured in OpenBanking Settings"))
 
-    # Prepara il payload per creare il Business Registry
-    payload = {
-        "fiscalId": client.fiscal_id,
-        "businessName": client.company_doc.company_name,
-        "email": client.settings.email,
-        "emailAlerts": True,
-        "locale": "it",
-        "country": "IT",
-        "enabled": True
-    }
+	# Prepara il payload per creare il Business Registry
+	payload = {
+		"fiscalId": client.fiscal_id,
+		"businessName": client.company_doc.company_name,
+		"email": client.settings.email,
+		"emailAlerts": True,
+		"locale": "it",
+		"country": "IT",
+		"enabled": True,
+	}
 
-    # Effettua la richiesta
-    response_data = client.post(
-        "business-registry",
-        "Create Business Registry",
-        payload=payload,
-        expected_status_codes=[201]
-    )
+	# Effettua la richiesta
+	response_data = client.post(
+		"business-registry", "Create Business Registry", payload=payload, expected_status_codes=[201]
+	)
 
-    # Segna il Business Registry come creato
-    client.settings.business_registry_created = 1
-    client.settings.save(ignore_permissions=True)
-    frappe.db.commit()
+	# Segna il Business Registry come creato
+	client.settings.business_registry_created = 1
+	client.settings.save(ignore_permissions=True)
+	frappe.db.commit()
 
-    print(f"DEBUG - Business Registry marked as created")
+	print("DEBUG - Business Registry marked as created")
 
-    return {
-        "success": True,
-        "message": _("Business Registry created successfully"),
-        "data": response_data
-    }
+	return {"success": True, "message": _("Business Registry created successfully"), "data": response_data}
 
 
 @frappe.whitelist()
 def get_business_registry_info(company):
-    """
-    Recupera le informazioni del Business Registry per l'azienda specificata.
+	"""
+	Recupera le informazioni del Business Registry per l'azienda specificata.
 
-    Args:
-        company: Nome della company
-    """
-    client = ACubeAPIClient(company)
+	Args:
+	    company: Nome della company
+	"""
+	client = ACubeAPIClient(company)
 
-    try:
-        response_data = client.get(
-            f"business-registry/{client.fiscal_id}",
-            "Get Business Registry Info"
-        )
+	try:
+		response_data = client.get(f"business-registry/{client.fiscal_id}", "Get Business Registry Info")
 
-        return {
-            "success": True,
-            "data": response_data
-        }
-    except Exception as e:
-        if "404" in str(e):
-            frappe.throw(_("Business Registry not found. Please create it first."))
-        raise
+		return {"success": True, "data": response_data}
+	except Exception as e:
+		if "404" in str(e):
+			frappe.throw(_("Business Registry not found. Please create it first."))
+		raise
 
 
 @frappe.whitelist()
 def start_connect_request(company, return_url=None, bank_manager_email=None, days=180, test_mode=0):
-    """
-    Avvia il processo di connessione bancaria per il Business Registry.
-    Restituisce un URL dove l'utente può selezionare la banca e autorizzare l'accesso.
+	"""
+	Avvia il processo di connessione bancaria per il Business Registry.
+	Restituisce un URL dove l'utente può selezionare la banca e autorizzare l'accesso.
 
-    Args:
-        company: Nome della company
-        return_url: URL opzionale dove tornare dopo la connessione
-        bank_manager_email: Email opzionale del manager che gestisce la connessione
-        days: Numero di giorni per il consenso (1-180, default 180)
-        test_mode: Se 1, usa banca fake per test (country code XF)
-    """
-    client = ACubeAPIClient(company)
+	Args:
+	    company: Nome della company
+	    return_url: URL opzionale dove tornare dopo la connessione
+	    bank_manager_email: Email opzionale del manager che gestisce la connessione
+	    days: Numero di giorni per il consenso (1-180, default 180)
+	    test_mode: Se 1, usa banca fake per test (country code XF)
+	"""
+	client = ACubeAPIClient(company)
 
-    # Determina il country code in base al test_mode
-    # XF = Fake bank per test (solo in sandbox)
-    # IT = Banche reali italiane
-    country_code = "XF" if int(test_mode) == 1 else "IT"
+	# Determina il country code in base al test_mode
+	# XF = Fake bank per test (solo in sandbox)
+	# IT = Banche reali italiane
+	country_code = "XF" if int(test_mode) == 1 else "IT"
 
-    # Prepara il payload
-    payload = {
-        "locale": "it",
-        "country": country_code,
-        "days": int(days)
-    }
+	# Prepara il payload
+	payload = {"locale": "it", "country": country_code, "days": int(days)}
 
-    # Aggiungi parametri opzionali se forniti
-    if return_url:
-        payload["returnUrl"] = return_url
-    if bank_manager_email:
-        payload["bankManagerEmail"] = bank_manager_email
+	# Aggiungi parametri opzionali se forniti
+	if return_url:
+		payload["returnUrl"] = return_url
+	if bank_manager_email:
+		payload["bankManagerEmail"] = bank_manager_email
 
-    response_data = client.post(
-        f"business-registry/{client.fiscal_id}/connect",
-        "Start Connect Request",
-        payload=payload,
-        expected_status_codes=[201]
-    )
+	response_data = client.post(
+		f"business-registry/{client.fiscal_id}/connect",
+		"Start Connect Request",
+		payload=payload,
+		expected_status_codes=[201],
+	)
 
-    connect_url = response_data.get("connectUrl")
-    if not connect_url:
-        frappe.throw(_("Connect URL not found in response"))
+	connect_url = response_data.get("connectUrl")
+	if not connect_url:
+		frappe.throw(_("Connect URL not found in response"))
 
-    return {
-        "success": True,
-        "connect_url": connect_url,
-        "message": _("Connect request created successfully")
-    }
+	return {"success": True, "connect_url": connect_url, "message": _("Connect request created successfully")}
 
 
 @frappe.whitelist()
 def get_accounts(company):
-    """
-    Recupera tutti gli account bancari autorizzati per il Business Registry.
-    Aggiorna la child table degli account nel documento OpenBanking Settings.
+	"""
+	Recupera tutti gli account bancari autorizzati per il Business Registry.
+	Aggiorna la child table degli account nel documento OpenBanking Settings.
 
-    Args:
-        company: Nome della company
-    """
-    client = ACubeAPIClient(company)
+	Args:
+	    company: Nome della company
+	"""
+	client = ACubeAPIClient(company)
 
-    try:
-        accounts_data = client.get(
-            f"business-registry/{client.fiscal_id}/accounts",
-            "Get Accounts"
-        )
+	try:
+		accounts_data = client.get(f"business-registry/{client.fiscal_id}/accounts", "Get Accounts")
 
-        # Pulisci la tabella esistente
-        client.settings.accounts = []
+		# Pulisci la tabella esistente
+		client.settings.accounts = []
 
-        # Aggiungi gli account alla child table
-        # Salviamo uuid, iban, enabled, raw_data e i campi display formattati
-        for account in accounts_data:
-            client.settings.append("accounts", {
-                "uuid": account.get("uuid"),
-                "iban": account.get("iban"),
-                "bank_display": account.get("providerName"),
-                "balance_display": format_currency(account.get("balance"), account.get("currencyCode", "EUR")),
-                "consent_expires_display": format_datetime_display(account.get("consentExpiresAt")),
-                "enabled": 1 if account.get("enabled") else 0,
-                "raw_data": json.dumps(account, indent=2)
-            })
+		# Aggiungi gli account alla child table
+		# Salviamo uuid, iban, enabled, raw_data e i campi display formattati
+		for account in accounts_data:
+			client.settings.append(
+				"accounts",
+				{
+					"uuid": account.get("uuid"),
+					"iban": account.get("iban"),
+					"bank_display": account.get("providerName"),
+					"balance_display": format_currency(
+						account.get("balance"), account.get("currencyCode", "EUR")
+					),
+					"consent_expires_display": format_datetime_display(account.get("consentExpiresAt")),
+					"enabled": 1 if account.get("enabled") else 0,
+					"raw_data": json.dumps(account, indent=2),
+				},
+			)
 
-        # Salva il documento
-        client.settings.save(ignore_permissions=True)
-        frappe.db.commit()
+		# Salva il documento
+		client.settings.save(ignore_permissions=True)
+		frappe.db.commit()
 
-        return {
-            "success": True,
-            "message": _("Retrieved {0} accounts").format(len(accounts_data)),
-            "count": len(accounts_data)
-        }
-    except Exception as e:
-        if "404" in str(e):
-            frappe.throw(_("No accounts found. Please connect a bank account first."))
-        raise
+		return {
+			"success": True,
+			"message": _("Retrieved {0} accounts").format(len(accounts_data)),
+			"count": len(accounts_data),
+		}
+	except Exception as e:
+		if "404" in str(e):
+			frappe.throw(_("No accounts found. Please connect a bank account first."))
+		raise
 
 
 @frappe.whitelist()
 def toggle_account(company, uuid, enabled):
-    """
-    Abilita o disabilita un account bancario.
-    Disabilitare un account cancella anche il saldo, i dati extra e le transazioni.
+	"""
+	Abilita o disabilita un account bancario.
+	Disabilitare un account cancella anche il saldo, i dati extra e le transazioni.
 
-    Args:
-        company: Nome della company
-        uuid: UUID dell'account da abilitare/disabilitare
-        enabled: 1 per abilitare, 0 per disabilitare
-    """
-    client = ACubeAPIClient(company)
+	Args:
+	    company: Nome della company
+	    uuid: UUID dell'account da abilitare/disabilitare
+	    enabled: 1 per abilitare, 0 per disabilitare
+	"""
+	client = ACubeAPIClient(company)
 
-    payload = {"enabled": bool(int(enabled))}
+	payload = {"enabled": bool(int(enabled))}
 
-    response_data = client.put(
-        f"accounts/{uuid}",
-        "Toggle Account",
-        payload=payload
-    )
+	response_data = client.put(f"accounts/{uuid}", "Toggle Account", payload=payload)
 
-    # Aggiorna direttamente il campo enabled nella child table usando db.set_value
-    # Questo evita conflitti di concorrenza quando si abilitano/disabilitano più account rapidamente
-    for account in client.settings.accounts:
-        if account.uuid == uuid:
-            frappe.db.set_value("OpenBanking Account", account.name, "enabled", int(enabled))
-            break
+	# Aggiorna direttamente il campo enabled nella child table usando db.set_value
+	# Questo evita conflitti di concorrenza quando si abilitano/disabilitano più account rapidamente
+	for account in client.settings.accounts:
+		if account.uuid == uuid:
+			frappe.db.set_value("OpenBanking Account", account.name, "enabled", int(enabled))
+			break
 
-    frappe.db.commit()
+	frappe.db.commit()
 
-    action = "enabled" if int(enabled) == 1 else "disabled"
-    return {
-        "success": True,
-        "message": _("Account {0} successfully").format(action),
-        "data": response_data
-    }
+	action = "enabled" if int(enabled) == 1 else "disabled"
+	return {"success": True, "message": _("Account {0} successfully").format(action), "data": response_data}
 
 
 @frappe.whitelist()
 def delete_account(company, uuid):
-    """
-    Elimina un account bancario e tutti gli account associati alla stessa connessione bancaria.
-    Tutti gli account devono essere disabilitati e non avere pagamenti collegati.
+	"""
+	Elimina un account bancario e tutti gli account associati alla stessa connessione bancaria.
+	Tutti gli account devono essere disabilitati e non avere pagamenti collegati.
 
-    Args:
-        company: Nome della company
-        uuid: UUID dell'account da eliminare
-    """
-    client = ACubeAPIClient(company)
+	Args:
+	    company: Nome della company
+	    uuid: UUID dell'account da eliminare
+	"""
+	client = ACubeAPIClient(company)
 
-    response_data = client.delete(
-        f"accounts/{uuid}",
-        "Delete Account",
-        expected_status_codes=[202]
-    )
+	response_data = client.delete(f"accounts/{uuid}", "Delete Account", expected_status_codes=[202])
 
-    removed_accounts = response_data.get("removedAccounts", [])
+	removed_accounts = response_data.get("removedAccounts", [])
 
-    # Rimuovi gli account dalla child table
-    accounts_to_keep = []
-    for account in client.settings.accounts:
-        if account.uuid not in removed_accounts:
-            accounts_to_keep.append(account)
+	# Rimuovi gli account dalla child table
+	accounts_to_keep = []
+	for account in client.settings.accounts:
+		if account.uuid not in removed_accounts:
+			accounts_to_keep.append(account)
 
-    client.settings.accounts = []
-    for account in accounts_to_keep:
-        client.settings.append("accounts", account.as_dict())
+	client.settings.accounts = []
+	for account in accounts_to_keep:
+		client.settings.append("accounts", account.as_dict())
 
-    client.settings.save(ignore_permissions=True)
-    frappe.db.commit()
+	client.settings.save(ignore_permissions=True)
+	frappe.db.commit()
 
-    return {
-        "success": True,
-        "message": _("Account deleted successfully. {0} account(s) removed.").format(len(removed_accounts)),
-        "removed_accounts": removed_accounts
-    }
+	return {
+		"success": True,
+		"message": _("Account deleted successfully. {0} account(s) removed.").format(len(removed_accounts)),
+		"removed_accounts": removed_accounts,
+	}
 
 
 @frappe.whitelist()
@@ -381,7 +356,7 @@ def get_transactions(company, account_uuid=None, from_date=None, to_date=None, p
 	# Prepara i parametri query
 	params = {
 		"page": page,
-		"itemsPerPage": min(int(items_per_page), 100)  # Max 100
+		"itemsPerPage": min(int(items_per_page), 100),  # Max 100
 	}
 
 	# Aggiungi filtro account se specificato
@@ -396,9 +371,7 @@ def get_transactions(company, account_uuid=None, from_date=None, to_date=None, p
 
 	try:
 		transactions_data = client.get(
-			f"business-registry/{client.fiscal_id}/transactions",
-			"Get Transactions",
-			params=params
+			f"business-registry/{client.fiscal_id}/transactions", "Get Transactions", params=params
 		)
 
 		return {
@@ -406,7 +379,7 @@ def get_transactions(company, account_uuid=None, from_date=None, to_date=None, p
 			"transactions": transactions_data,
 			"total": len(transactions_data),
 			"page": page,
-			"items_per_page": items_per_page
+			"items_per_page": items_per_page,
 		}
 	except Exception as e:
 		if "404" in str(e):
@@ -416,7 +389,7 @@ def get_transactions(company, account_uuid=None, from_date=None, to_date=None, p
 				"transactions": [],
 				"total": 0,
 				"page": page,
-				"items_per_page": items_per_page
+				"items_per_page": items_per_page,
 			}
 		raise
 
@@ -462,10 +435,10 @@ def parse_date(date_string):
 		if len(date_string) == 10:
 			return date_string
 		# Se è ISO datetime, prendi solo la data
-		dt = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
-		return dt.strftime('%Y-%m-%d')
+		dt = datetime.fromisoformat(date_string.replace("Z", "+00:00"))
+		return dt.strftime("%Y-%m-%d")
 	except Exception as e:
-		frappe.log_error(f"Error parsing date: {date_string}, Error: {str(e)}", "Date Parse Error")
+		frappe.log_error(f"Error parsing date: {date_string}, Error: {e!s}", "Date Parse Error")
 		return None
 
 
@@ -495,11 +468,7 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 	failed_count = 0
 
 	# Contatori dettagliati per i skip
-	skip_reasons = {
-		"already_imported": 0,
-		"currency_not_found": 0,
-		"currency_mismatch": 0
-	}
+	skip_reasons = {"already_imported": 0, "currency_not_found": 0, "currency_mismatch": 0}
 
 	# Ottieni le impostazioni
 	settings = frappe.get_doc("OpenBanking Settings", company)
@@ -529,7 +498,7 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 				from_date=from_date,
 				to_date=to_date,
 				page=1,
-				items_per_page=100
+				items_per_page=100,
 			)
 
 			if not result.get("success"):
@@ -554,18 +523,14 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 			bank_account = None
 			if account_info.iban:
 				bank_account = frappe.db.get_value(
-					"Bank Account",
-					{"iban": account_info.iban, "company": company},
-					"name"
+					"Bank Account", {"iban": account_info.iban, "company": company}, "name"
 				)
 
 			if not bank_account:
 				print(f"WARNING - No Bank Account found for IBAN {account_info.iban}")
 				# Prova a trovare un bank account generico per la company
 				bank_account = frappe.db.get_value(
-					"Bank Account",
-					{"company": company, "is_default": 1},
-					"name"
+					"Bank Account", {"company": company, "is_default": 1}, "name"
 				)
 
 			# Importa ogni transazione
@@ -577,7 +542,9 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 
 					# 1. Verifica che la valuta esista in ERPNext
 					if not frappe.db.exists("Currency", transaction_currency):
-						print(f"WARNING - Currency {transaction_currency} not configured in ERPNext, skipping transaction {unique_id}")
+						print(
+							f"WARNING - Currency {transaction_currency} not configured in ERPNext, skipping transaction {unique_id}"
+						)
 						skipped_count += 1
 						skip_reasons["currency_not_found"] += 1
 						continue
@@ -586,18 +553,21 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 					if bank_account:
 						company_account = frappe.db.get_value("Bank Account", bank_account, "account")
 						if company_account:
-							bank_account_currency = frappe.db.get_value("Account", company_account, "account_currency")
+							bank_account_currency = frappe.db.get_value(
+								"Account", company_account, "account_currency"
+							)
 
 							if bank_account_currency and transaction_currency != bank_account_currency:
-								print(f"WARNING - Transaction {unique_id} currency {transaction_currency} does not match Bank Account currency {bank_account_currency}, skipping")
+								print(
+									f"WARNING - Transaction {unique_id} currency {transaction_currency} does not match Bank Account currency {bank_account_currency}, skipping"
+								)
 								skipped_count += 1
 								skip_reasons["currency_mismatch"] += 1
 								continue
 
 					# 3. Controlla se esiste già un log per questo ID univoco
 					existing_log_name = frappe.db.exists(
-						"ACube Transaction Log",
-						{"acube_transaction_id": unique_id}
+						"ACube Transaction Log", {"acube_transaction_id": unique_id}
 					)
 
 					if existing_log_name:
@@ -605,34 +575,43 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 						log_entry = frappe.get_doc("ACube Transaction Log", existing_log_name)
 
 						# Aggiungi una nuova reception alla child table
-						log_entry.append("receptions", {
-							"reception_date": frappe.utils.now(),
-							"raw_data": json.dumps(txn, indent=2)
-						})
+						log_entry.append(
+							"receptions",
+							{"reception_date": frappe.utils.now(), "raw_data": json.dumps(txn, indent=2)},
+						)
 						log_entry.save(ignore_permissions=True)
 
 						# Aggiorna status e sync_date
-						frappe.db.set_value("ACube Transaction Log", log_entry.name, "import_status", "Duplicate")
-						frappe.db.set_value("ACube Transaction Log", log_entry.name, "sync_date", frappe.utils.now())
-						print(f"DEBUG - Transaction {unique_id} already logged, updated as Duplicate and added reception")
+						frappe.db.set_value(
+							"ACube Transaction Log", log_entry.name, "import_status", "Duplicate"
+						)
+						frappe.db.set_value(
+							"ACube Transaction Log", log_entry.name, "sync_date", frappe.utils.now()
+						)
+						print(
+							f"DEBUG - Transaction {unique_id} already logged, updated as Duplicate and added reception"
+						)
 					else:
 						# Log non esiste, crealo
 						log_entry = create_transaction_log(
 							company=company,
 							account_uuid=acc_uuid,
 							transaction_data=txn,
-							bank_account=bank_account
+							bank_account=bank_account,
 						)
 
 					# 4. Controlla se esiste già il Bank Transaction con questo ID univoco
 					existing_bank_txn = frappe.db.exists(
-						"Bank Transaction",
-						{"acube_transaction_id": unique_id}
+						"Bank Transaction", {"acube_transaction_id": unique_id}
 					)
 
 					if existing_bank_txn:
-						print(f"DEBUG - Transaction {unique_id} already exists in Bank Transaction, skipping import")
-						frappe.db.set_value("ACube Transaction Log", log_entry.name, "bank_transaction", existing_bank_txn)
+						print(
+							f"DEBUG - Transaction {unique_id} already exists in Bank Transaction, skipping import"
+						)
+						frappe.db.set_value(
+							"ACube Transaction Log", log_entry.name, "bank_transaction", existing_bank_txn
+						)
 						skipped_count += 1
 						skip_reasons["already_imported"] += 1
 						continue
@@ -643,12 +622,14 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 						bank_account=bank_account,
 						account_info=account_info,
 						transaction_data=txn,
-						transaction_log=log_entry.name
+						transaction_log=log_entry.name,
 					)
 
 					# 6. Aggiorna log con successo
 					frappe.db.set_value("ACube Transaction Log", log_entry.name, "import_status", "Imported")
-					frappe.db.set_value("ACube Transaction Log", log_entry.name, "bank_transaction", bank_txn.name)
+					frappe.db.set_value(
+						"ACube Transaction Log", log_entry.name, "bank_transaction", bank_txn.name
+					)
 
 					imported_count += 1
 					print(f"DEBUG - Imported transaction {bank_txn.name}")
@@ -660,8 +641,12 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 
 					# Aggiorna log con errore
 					if log_entry:
-						frappe.db.set_value("ACube Transaction Log", log_entry.name, "import_status", "Failed")
-						frappe.db.set_value("ACube Transaction Log", log_entry.name, "error_message", error_msg[:500])
+						frappe.db.set_value(
+							"ACube Transaction Log", log_entry.name, "import_status", "Failed"
+						)
+						frappe.db.set_value(
+							"ACube Transaction Log", log_entry.name, "error_message", error_msg[:500]
+						)
 
 					failed_count += 1
 					continue
@@ -676,9 +661,11 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 	frappe.db.commit()
 
 	# Costruisci messaggio dettagliato
-	message_parts = [_("Import completed: {0} imported, {1} skipped, {2} failed").format(
-		imported_count, skipped_count, failed_count
-	)]
+	message_parts = [
+		_("Import completed: {0} imported, {1} skipped, {2} failed").format(
+			imported_count, skipped_count, failed_count
+		)
+	]
 
 	# Aggiungi dettagli skip se ci sono transazioni skippate
 	if skipped_count > 0:
@@ -701,7 +688,7 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 		"skipped": skipped_count,
 		"failed": failed_count,
 		"message": message,
-		"skip_reasons": skip_reasons
+		"skip_reasons": skip_reasons,
 	}
 
 
@@ -720,24 +707,28 @@ def create_transaction_log(company, account_uuid, transaction_data, bank_account
 	"""
 	unique_id = extract_unique_transaction_id(transaction_data)
 
-	log = frappe.get_doc({
-		"doctype": "ACube Transaction Log",
-		"company": company,
-		"bank_account": bank_account,
-		"acube_account_uuid": account_uuid,
-		"transaction_date": parse_date(transaction_data.get("madeOn")),
-		"acube_transaction_id": unique_id,
-		"transaction_status": transaction_data.get("status"),
-		"amount": abs(float(transaction_data.get("amount", 0))),
-		"currency": transaction_data.get("currencyCode"),
-		"import_status": "Pending",
-		"raw_data": json.dumps(transaction_data, indent=2)
-	})
+	log = frappe.get_doc(
+		{
+			"doctype": "ACube Transaction Log",
+			"company": company,
+			"bank_account": bank_account,
+			"acube_account_uuid": account_uuid,
+			"transaction_date": parse_date(transaction_data.get("madeOn")),
+			"acube_transaction_id": unique_id,
+			"transaction_status": transaction_data.get("status"),
+			"amount": abs(float(transaction_data.get("amount", 0))),
+			"currency": transaction_data.get("currencyCode"),
+			"import_status": "Pending",
+			"raw_data": json.dumps(transaction_data, indent=2),
+		}
+	)
 	log.insert(ignore_permissions=True)
 	return log
 
 
-def create_bank_transaction_from_acube(company, bank_account, account_info, transaction_data, transaction_log=None):
+def create_bank_transaction_from_acube(
+	company, bank_account, account_info, transaction_data, transaction_log=None
+):
 	"""
 	Crea un Bank Transaction da dati ACube.
 
@@ -759,28 +750,30 @@ def create_bank_transaction_from_acube(company, bank_account, account_info, tran
 	withdrawal = abs(amount) if amount < 0 else 0
 
 	# Crea Bank Transaction
-	bank_txn = frappe.get_doc({
-		"doctype": "Bank Transaction",
-		"date": parse_date(transaction_data.get("madeOn")),
-		"status": "Pending",
-		"bank_account": bank_account,
-		"company": company,
-		"deposit": deposit,
-		"withdrawal": withdrawal,
-		"currency": transaction_data.get("currencyCode"),
-		"description": transaction_data.get("description", "")[:140],
-		"reference_number": unique_id,
-		"transaction_id": unique_id,
-		# Custom fields ACube
-		"acube_transaction_log": transaction_log,
-		"acube_transaction_id": unique_id,
-		"api_source": "ACube",
-		"acube_booking_date": parse_date(transaction_data.get("madeOn")),
-		"acube_value_date": parse_date(transaction_data.get("madeOn")),
-		"acube_status": transaction_data.get("status"),
-		"acube_category": transaction_data.get("category"),
-		"acube_raw_data": json.dumps(transaction_data, indent=2)
-	})
+	bank_txn = frappe.get_doc(
+		{
+			"doctype": "Bank Transaction",
+			"date": parse_date(transaction_data.get("madeOn")),
+			"status": "Pending",
+			"bank_account": bank_account,
+			"company": company,
+			"deposit": deposit,
+			"withdrawal": withdrawal,
+			"currency": transaction_data.get("currencyCode"),
+			"description": transaction_data.get("description", "")[:140],
+			"reference_number": unique_id,
+			"transaction_id": unique_id,
+			# Custom fields ACube
+			"acube_transaction_log": transaction_log,
+			"acube_transaction_id": unique_id,
+			"api_source": "ACube",
+			"acube_booking_date": parse_date(transaction_data.get("madeOn")),
+			"acube_value_date": parse_date(transaction_data.get("madeOn")),
+			"acube_status": transaction_data.get("status"),
+			"acube_category": transaction_data.get("category"),
+			"acube_raw_data": json.dumps(transaction_data, indent=2),
+		}
+	)
 
 	# Prova a estrarre info controparte dal campo extra
 	extra = transaction_data.get("extra", {})
@@ -835,21 +828,29 @@ def cancel_duplicate_transaction(bank_transaction):
 
 		# Aggiorna il Transaction Log se esiste
 		if transaction_log_name:
-			frappe.db.set_value("ACube Transaction Log", transaction_log_name, {
-				"import_status": "Duplicate",
-				"error_message": "Transazione annullata manualmente come duplicato"
-			})
+			frappe.db.set_value(
+				"ACube Transaction Log",
+				transaction_log_name,
+				{
+					"import_status": "Duplicate",
+					"error_message": "Transazione annullata manualmente come duplicato",
+				},
+			)
 			frappe.logger().info(f"ACube Transaction Log {transaction_log_name} marked as duplicate")
 
 		frappe.db.commit()
 
 		return {
 			"success": True,
-			"message": _("Transazione annullata come duplicato. Rimane visibile con stato Cancelled e non può più essere riconciliata.")
+			"message": _(
+				"Transazione annullata come duplicato. Rimane visibile con stato Cancelled e non può più essere riconciliata."
+			),
 		}
 
 	except Exception as e:
 		frappe.db.rollback()
 		error_msg = str(e)
-		frappe.log_error(f"Error cancelling transaction {bank_transaction}: {error_msg}", "Cancel Transaction Error")
+		frappe.log_error(
+			f"Error cancelling transaction {bank_transaction}: {error_msg}", "Cancel Transaction Error"
+		)
 		frappe.throw(_("Errore durante l'annullamento della transazione: {0}").format(error_msg))

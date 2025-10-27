@@ -1,5 +1,6 @@
-import frappe
 import json
+
+import frappe
 from frappe import _
 
 
@@ -16,60 +17,40 @@ def get_columns():
 			"label": _("Company"),
 			"fieldtype": "Link",
 			"options": "Company",
-			"width": 200
+			"width": 200,
 		},
-		{
-			"fieldname": "iban",
-			"label": _("IBAN"),
-			"fieldtype": "Data",
-			"width": 200
-		},
-		{
-			"fieldname": "bank_display",
-			"label": _("Bank"),
-			"fieldtype": "Data",
-			"width": 150
-		},
-		{
-			"fieldname": "balance_display",
-			"label": _("Balance"),
-			"fieldtype": "Data",
-			"width": 120
-		},
+		{"fieldname": "iban", "label": _("IBAN"), "fieldtype": "Data", "width": 200},
+		{"fieldname": "bank_display", "label": _("Bank"), "fieldtype": "Data", "width": 150},
+		{"fieldname": "balance_display", "label": _("Balance"), "fieldtype": "Data", "width": 120},
 		{
 			"fieldname": "consent_expires_display",
 			"label": _("Consent Expires"),
 			"fieldtype": "Data",
-			"width": 150
+			"width": 150,
 		},
-		{
-			"fieldname": "enabled",
-			"label": _("Enabled"),
-			"fieldtype": "Check",
-			"width": 80
-		},
-		{
-			"fieldname": "uuid",
-			"label": _("UUID"),
-			"fieldtype": "Data",
-			"width": 100
-		}
+		{"fieldname": "enabled", "label": _("Enabled"), "fieldtype": "Check", "width": 80},
+		{"fieldname": "uuid", "label": _("UUID"), "fieldtype": "Data", "width": 100},
 	]
 
 
 def get_data(filters):
 	data = []
 
-	settings_list = frappe.get_all(
-		"OpenBanking Settings",
-		fields=["name", "company"]
-	)
+	settings_list = frappe.get_all("OpenBanking Settings", fields=["name", "company"])
 
 	for settings in settings_list:
 		accounts = frappe.get_all(
 			"OpenBanking Account",
 			filters={"parent": settings.name, "parenttype": "OpenBanking Settings"},
-			fields=["iban", "bank_display", "balance_display", "consent_expires_display", "enabled", "uuid", "raw_data"]
+			fields=[
+				"iban",
+				"bank_display",
+				"balance_display",
+				"consent_expires_display",
+				"enabled",
+				"uuid",
+				"raw_data",
+			],
 		)
 
 		for account in accounts:
@@ -81,16 +62,18 @@ def get_data(filters):
 			except (json.JSONDecodeError, ValueError, TypeError):
 				pass
 
-			data.append({
-				"company": settings.company,
-				"iban": account.iban,
-				"bank_display": account.bank_display,
-				"balance_display": account.balance_display,
-				"consent_expires_display": account.consent_expires_display,
-				"enabled": account.enabled,
-				"uuid": account.uuid,
-				"_balance_numeric": balance_numeric
-			})
+			data.append(
+				{
+					"company": settings.company,
+					"iban": account.iban,
+					"bank_display": account.bank_display,
+					"balance_display": account.balance_display,
+					"consent_expires_display": account.consent_expires_display,
+					"enabled": account.enabled,
+					"uuid": account.uuid,
+					"_balance_numeric": balance_numeric,
+				}
+			)
 
 	# Ordina i conti per balance decrescente (dal più alto al più basso)
 	# key=lambda x: x["_balance_numeric"] indica il campo da usare per l'ordinamento

@@ -1,7 +1,9 @@
 app_name = "solede_openbanking"
 app_title = "Solede Openbanking"
 app_publisher = "Solede SA"
-app_description = "Integrazione Open Banking per gestire connessioni bancarie, transazioni e pagamenti tramite API PSD2"
+app_description = (
+	"Integrazione Open Banking per gestire connessioni bancarie, transazioni e pagamenti tramite API PSD2"
+)
 app_email = "info@solede.com"
 app_license = "AGPLv3"
 
@@ -46,7 +48,7 @@ app_include_js = "/assets/solede_openbanking/js/openbanking_helpers.js"
 doctype_js = {
 	"Bank Transaction": "public/js/bank_transaction.js",
 	"Supplier": "public/js/supplier.js",
-	"Purchase Invoice": "public/js/purchase_invoice.js"
+	"Purchase Invoice": "public/js/purchase_invoice.js",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -152,11 +154,7 @@ doctype_js = {
 # Scheduled Tasks
 # ---------------
 
-scheduler_events = {
-	"hourly": [
-		"solede_openbanking.api.scheduled_tasks.sync_all_openbanking_data"
-	]
-}
+scheduler_events = {"hourly": ["solede_openbanking.api.scheduled_tasks.sync_all_openbanking_data"]}
 
 # Testing
 # -------
@@ -237,73 +235,73 @@ scheduler_events = {
 # Fixtures
 # --------
 fixtures = [
-    {
-        "dt": "Custom Field",
-        "filters": [
-            [
-                "name",
-                "in",
-                [
-                    "Bank Transaction-acube_section",
-                    "Bank Transaction-acube_transaction_log",
-                    "Bank Transaction-acube_transaction_id",
-                    "Bank Transaction-api_source",
-                    "Bank Transaction-acube_booking_date",
-                    "Bank Transaction-acube_value_date",
-                    "Bank Transaction-acube_column_break",
-                    "Bank Transaction-acube_status",
-                    "Bank Transaction-acube_category",
-                    "Bank Transaction-acube_raw_data",
-                ],
-            ]
-        ],
-    },
-    {
-        "dt": "Custom Field",
-        "filters": [
-            [
-                "module",
-                "in",
-                [
-                    "Solede Openbanking",
-                ],
-            ],
-        ],
-    },
-    {
-        "dt": "Print Format",
-        "filters": [
-            [
-                "module",
-                "in",
-                [
-                    "Solede Openbanking",
-                ],
-            ],
-        ],
-    },
-    {
-        "dt": "Property Setter",
-        "filters": [
-            [
-                "module",
-                "in",
-                [
-                    "Solede Openbanking",
-                ],
-            ],
-        ],
-    },
-    {
-        "dt": "Workspace",
-        "filters": [
-            [
-                "module",
-                "in",
-                [
-                    "Solede Openbanking",
-                ],
-            ],
-        ],
-    },
+	{
+		"dt": "Custom Field",
+		"filters": [
+			[
+				"name",
+				"in",
+				[
+					"Bank Transaction-acube_section",
+					"Bank Transaction-acube_transaction_log",
+					"Bank Transaction-acube_transaction_id",
+					"Bank Transaction-api_source",
+					"Bank Transaction-acube_booking_date",
+					"Bank Transaction-acube_value_date",
+					"Bank Transaction-acube_column_break",
+					"Bank Transaction-acube_status",
+					"Bank Transaction-acube_category",
+					"Bank Transaction-acube_raw_data",
+				],
+			]
+		],
+	},
+	{
+		"dt": "Custom Field",
+		"filters": [
+			[
+				"module",
+				"in",
+				[
+					"Solede Openbanking",
+				],
+			],
+		],
+	},
+	{
+		"dt": "Print Format",
+		"filters": [
+			[
+				"module",
+				"in",
+				[
+					"Solede Openbanking",
+				],
+			],
+		],
+	},
+	{
+		"dt": "Property Setter",
+		"filters": [
+			[
+				"module",
+				"in",
+				[
+					"Solede Openbanking",
+				],
+			],
+		],
+	},
+	{
+		"dt": "Workspace",
+		"filters": [
+			[
+				"module",
+				"in",
+				[
+					"Solede Openbanking",
+				],
+			],
+		],
+	},
 ]

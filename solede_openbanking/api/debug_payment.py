@@ -1,9 +1,11 @@
 # Copyright (c) 2025, Solede and contributors
 # For license information, please see license.txt
 
-import frappe
 import json
+
+import frappe
 from frappe import _
+
 from solede_openbanking.api.client import ACubeAPIClient
 
 
@@ -35,24 +37,18 @@ def inspect_account_raw_data(company, account_uuid):
 						"iban": acc.iban,
 						"bank_display": acc.bank_display,
 						"raw_data": raw_data,
-						"raw_data_json": json.dumps(raw_data, indent=2)
+						"raw_data_json": json.dumps(raw_data, indent=2),
 					}
 				except json.JSONDecodeError as e:
 					return {
 						"success": False,
-						"error": f"JSON decode error: {str(e)}",
-						"raw_data_string": acc.raw_data
+						"error": f"JSON decode error: {e!s}",
+						"raw_data_string": acc.raw_data,
 					}
 			else:
-				return {
-					"success": False,
-					"error": "No raw_data found for this account"
-				}
+				return {"success": False, "error": "No raw_data found for this account"}
 
-	return {
-		"success": False,
-		"error": f"Account not found: {account_uuid}"
-	}
+	return {"success": False, "error": f"Account not found: {account_uuid}"}
 
 
 @frappe.whitelist()
@@ -95,7 +91,7 @@ def debug_payment_request(company, account_uuid, creditor_iban, amount="10.00", 
 			"creditorIban": creditor_iban_clean,
 			"creditorName": "Test Creditor",
 			"returnUrl": return_url,
-			"errorUrl": error_url
+			"errorUrl": error_url,
 		}
 
 		# Costruisci endpoint
@@ -114,8 +110,8 @@ def debug_payment_request(company, account_uuid, creditor_iban, amount="10.00", 
 			"payload": payload,
 			"headers": {
 				"Authorization": "Bearer " + (client.token[:50] + "..." if client.token else "MISSING"),
-				"Content-Type": "application/json"
-			}
+				"Content-Type": "application/json",
+			},
 		}
 
 		print("=" * 80)
@@ -128,11 +124,7 @@ def debug_payment_request(company, account_uuid, creditor_iban, amount="10.00", 
 		try:
 			response = client.post(endpoint, f"Test {system.upper()} Payment", payload=payload)
 
-			result = {
-				"success": True,
-				"debug_info": debug_info,
-				"response": response
-			}
+			result = {"success": True, "debug_info": debug_info, "response": response}
 
 			print("=" * 80)
 			print("RESPONSE SUCCESS")
@@ -144,11 +136,7 @@ def debug_payment_request(company, account_uuid, creditor_iban, amount="10.00", 
 		except Exception as api_error:
 			error_msg = str(api_error)
 
-			result = {
-				"success": False,
-				"debug_info": debug_info,
-				"error": error_msg
-			}
+			result = {"success": False, "debug_info": debug_info, "error": error_msg}
 
 			print("=" * 80)
 			print("RESPONSE ERROR")
@@ -164,7 +152,7 @@ def debug_payment_request(company, account_uuid, creditor_iban, amount="10.00", 
 		return {
 			"success": False,
 			"error": error_msg,
-			"message": "Errore durante il debug della richiesta di pagamento"
+			"message": "Errore durante il debug della richiesta di pagamento",
 		}
 
 
@@ -191,7 +179,7 @@ def verify_settings(company):
 			"business_registry_created": settings.business_registry_created,
 			"enabled_accounts_count": len([acc for acc in settings.accounts if acc.enabled]),
 			"total_accounts_count": len(settings.accounts),
-			"accounts": []
+			"accounts": [],
 		}
 
 		# Aggiungi dettagli account
@@ -201,7 +189,7 @@ def verify_settings(company):
 					"uuid": acc.uuid,
 					"iban": acc.iban,
 					"bank": acc.bank_display,
-					"enabled": acc.enabled
+					"enabled": acc.enabled,
 				}
 
 				# Parse raw_data per capabilities
@@ -209,7 +197,7 @@ def verify_settings(company):
 					try:
 						raw_data = json.loads(acc.raw_data)
 						account_info["systems"] = raw_data.get("systems", [])
-					except:
+					except Exception:
 						account_info["systems"] = "Error parsing raw_data"
 
 				config["accounts"].append(account_info)
@@ -220,16 +208,10 @@ def verify_settings(company):
 		print(json.dumps(config, indent=2))
 		print("=" * 80)
 
-		return {
-			"success": True,
-			"config": config
-		}
+		return {"success": True, "config": config}
 
 	except Exception as e:
 		error_msg = str(e)
 		frappe.log_error(f"Verify Settings Error: {error_msg}", "Verify Settings")
 
-		return {
-			"success": False,
-			"error": error_msg
-		}
+		return {"success": False, "error": error_msg}

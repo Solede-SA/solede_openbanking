@@ -6,8 +6,9 @@
 import frappe
 import requests
 from frappe import _
+
 from solede_openbanking.api.authentication import get_valid_token
-from solede_openbanking.api.utils import handle_api_error, debug_log, validate_company_settings
+from solede_openbanking.api.utils import debug_log, handle_api_error, validate_company_settings
 
 
 class ACubeAPIClient:
@@ -54,8 +55,9 @@ class ACubeAPIClient:
 			headers["Content-Type"] = "application/json"
 		return headers
 
-	def make_request(self, method, endpoint_path, operation_name,
-					 expected_status_codes=None, debug=True, **kwargs):
+	def make_request(
+		self, method, endpoint_path, operation_name, expected_status_codes=None, debug=True, **kwargs
+	):
 		"""
 		Effettua una richiesta API con gestione errori uniforme.
 
@@ -77,15 +79,11 @@ class ACubeAPIClient:
 
 		# Log di debug
 		if debug:
-			debug_params = {
-				"Method": method,
-				"URL": url,
-				"Token": self.token
-			}
-			if 'json' in kwargs:
-				debug_params["Payload"] = kwargs['json']
-			if 'params' in kwargs:
-				debug_params["Params"] = kwargs['params']
+			debug_params = {"Method": method, "URL": url, "Token": self.token}
+			if "json" in kwargs:
+				debug_params["Payload"] = kwargs["json"]
+			if "params" in kwargs:
+				debug_params["Params"] = kwargs["params"]
 			debug_log(operation_name, **debug_params)
 
 		try:
@@ -100,7 +98,7 @@ class ACubeAPIClient:
 			# Verifica status code
 			if response.status_code in expected_status_codes:
 				# Se la risposta è vuota (es. 204 No Content), ritorna dict vuoto
-				if not response.text or response.text.strip() == '':
+				if not response.text or response.text.strip() == "":
 					return {}
 				return response.json()
 			else:
@@ -140,8 +138,9 @@ class ACubeAPIClient:
 			dict: Response JSON
 		"""
 		headers = self.get_headers(include_content_type=True)
-		return self.make_request("POST", endpoint_path, operation_name,
-								 json=payload, headers=headers, **kwargs)
+		return self.make_request(
+			"POST", endpoint_path, operation_name, json=payload, headers=headers, **kwargs
+		)
 
 	def put(self, endpoint_path, operation_name, payload=None, **kwargs):
 		"""
@@ -157,8 +156,9 @@ class ACubeAPIClient:
 			dict: Response JSON
 		"""
 		headers = self.get_headers(include_content_type=True)
-		return self.make_request("PUT", endpoint_path, operation_name,
-								 json=payload, headers=headers, **kwargs)
+		return self.make_request(
+			"PUT", endpoint_path, operation_name, json=payload, headers=headers, **kwargs
+		)
 
 	def delete(self, endpoint_path, operation_name, **kwargs):
 		"""

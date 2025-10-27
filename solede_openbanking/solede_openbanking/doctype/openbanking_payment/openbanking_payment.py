@@ -37,4 +37,4 @@ class OpenBankingPayment(Document):
 				ref_doc.db_set("openbanking_status", self.status, update_modified=False)
 
 		except Exception as e:
-			frappe.log_error(f"Error updating reference document: {str(e)}", "OpenBanking Payment Update Error")
+			frappe.log_error(f"Error updating reference document: {e!s}", "OpenBanking Payment Update Error")

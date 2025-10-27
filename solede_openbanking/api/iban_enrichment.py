@@ -7,28 +7,27 @@ import frappe
 import requests
 from frappe import _
 
-
 # Configurazione API - Aggiungi le tue API key nelle Openbanking Settings
 IBAN_API_PROVIDERS = {
 	"iban.com": {
 		"url": "https://api.iban.com/clients/api/v4/iban/{iban}",
 		"method": "GET",
 		"auth_param": "api_key",
-		"parser": "parse_iban_com_response"
+		"parser": "parse_iban_com_response",
 	},
 	"ibanapi.com": {
 		"url": "https://api.ibanapi.com/v1/validate/{iban}",
 		"method": "GET",
 		"auth_param": "api_key",
-		"parser": "parse_ibanapi_com_response"
+		"parser": "parse_ibanapi_com_response",
 	},
 	"api-ninjas": {
 		"url": "https://api.api-ninjas.com/v1/iban",
 		"method": "GET",
 		"auth_header": "X-Api-Key",
 		"param": "iban",
-		"parser": "parse_api_ninjas_response"
-	}
+		"parser": "parse_api_ninjas_response",
+	},
 }
 
 
@@ -74,7 +73,7 @@ def validate_iban_format(iban):
 	numeric_iban = ""
 	for char in rearranged:
 		if char.isalpha():
-			numeric_iban += str(ord(char) - ord('A') + 10)
+			numeric_iban += str(ord(char) - ord("A") + 10)
 		else:
 			numeric_iban += char
 
@@ -99,10 +98,12 @@ def get_iban_api_config(company):
 	api_key = settings.get_password("iban_api_key")
 
 	if not api_provider or not api_key:
-		frappe.throw(_(
-			"Configurazione API IBAN mancante per la company {0}. "
-			"Vai in OpenBanking Settings ({0}) e configura IBAN API Provider e IBAN API Key."
-		).format(company))
+		frappe.throw(
+			_(
+				"Configurazione API IBAN mancante per la company {0}. "
+				"Vai in OpenBanking Settings ({0}) e configura IBAN API Provider e IBAN API Key."
+			).format(company)
+		)
 
 	return api_provider, api_key
 
@@ -136,9 +137,9 @@ def call_iban_api(iban, provider, api_key):
 	response = requests.get(url, params=params, headers=headers, timeout=15)
 
 	if response.status_code != 200:
-		frappe.throw(_(
-			"Errore API {0}: Status {1} - {2}"
-		).format(provider, response.status_code, response.text[:200]))
+		frappe.throw(
+			_("Errore API {0}: Status {1} - {2}").format(provider, response.status_code, response.text[:200])
+		)
 
 	data = response.json()
 
@@ -164,7 +165,7 @@ def parse_iban_com_response(data, iban):
 		"bank_code": iban_data.get("bank_code"),
 		"branch_code": iban_data.get("branch_code"),
 		"city": iban_data.get("city"),
-		"address": iban_data.get("address")
+		"address": iban_data.get("address"),
 	}
 
 
@@ -186,7 +187,7 @@ def parse_ibanapi_com_response(data, iban):
 		"branch_code": None,  # Non disponibile in questa API
 		"city": bank_data.get("city"),
 		"address": bank_data.get("address"),
-		"zip": bank_data.get("zip")
+		"zip": bank_data.get("zip"),
 	}
 
 
@@ -199,7 +200,7 @@ def parse_api_ninjas_response(data, iban):
 		"bank_name": data.get("bank_name"),
 		"swift_number": data.get("bic"),
 		"country_code": data.get("country"),
-		"bank_code": data.get("bank_code")
+		"bank_code": data.get("bank_code"),
 	}
 
 
@@ -213,23 +214,17 @@ def create_bank_and_account_from_iban(iban, party_type, party, account_name=None
 
 	# VERIFICA SUBITO se Bank Account esiste già per questo fornitore
 	existing_account = frappe.db.exists(
-		"Bank Account",
-		{
-			"iban": iban_clean,
-			"party_type": party_type,
-			"party": party
-		}
+		"Bank Account", {"iban": iban_clean, "party_type": party_type, "party": party}
 	)
 
 	if existing_account:
 		account_doc = frappe.get_doc("Bank Account", existing_account)
 		frappe.msgprint(
 			_("Bank Account già esistente per questo {0}: {1}").format(
-				party_type,
-				frappe.bold(account_doc.name)
+				party_type, frappe.bold(account_doc.name)
 			),
 			indicator="orange",
-			alert=True
+			alert=True,
 		)
 		return account_doc
 
@@ -261,18 +256,20 @@ def create_bank_and_account_from_iban(iban, party_type, party, account_name=None
 		party_name = party_doc.supplier_name if party_type == "Supplier" else party_doc.customer_name
 		account_name = f"{party_name} - {bank_info['bank_name']}"
 
-	bank_account = frappe.get_doc({
-		"doctype": "Bank Account",
-		"account_name": account_name,
-		"bank": bank.name,
-		"iban": iban_clean,
-		"bank_account_no": extract_account_number(iban_clean),
-		"branch_code": bank_info.get("branch_code"),
-		"party_type": party_type,
-		"party": party,
-		"is_company_account": 0,
-		"is_default": 1
-	})
+	bank_account = frappe.get_doc(
+		{
+			"doctype": "Bank Account",
+			"account_name": account_name,
+			"bank": bank.name,
+			"iban": iban_clean,
+			"bank_account_no": extract_account_number(iban_clean),
+			"branch_code": bank_info.get("branch_code"),
+			"party_type": party_type,
+			"party": party,
+			"is_company_account": 0,
+			"is_default": 1,
+		}
+	)
 
 	bank_account.insert()
 	frappe.db.commit()
@@ -313,11 +310,7 @@ def get_or_create_bank(bank_info):
 			return frappe.get_doc("Bank", existing_bank)
 
 	# Crea nuovo Bank
-	bank = frappe.get_doc({
-		"doctype": "Bank",
-		"bank_name": bank_name,
-		"swift_number": swift_number
-	})
+	bank = frappe.get_doc({"doctype": "Bank", "bank_name": bank_name, "swift_number": swift_number})
 
 	bank.insert()
 	frappe.db.commit()
@@ -333,20 +326,12 @@ def validate_iban_api(iban, company=None, party_type=None, party=None):
 		is_valid = validate_iban_format(iban_clean)
 
 		if not is_valid:
-			return {
-				"valid": False,
-				"message": _("IBAN non valido")
-			}
+			return {"valid": False, "message": _("IBAN non valido")}
 
 		# VERIFICA se esiste già per questo fornitore/cliente
 		if party_type and party:
 			existing_account = frappe.db.exists(
-				"Bank Account",
-				{
-					"iban": iban_clean,
-					"party_type": party_type,
-					"party": party
-				}
+				"Bank Account", {"iban": iban_clean, "party_type": party_type, "party": party}
 			)
 
 			if existing_account:
@@ -357,10 +342,12 @@ def validate_iban_api(iban, company=None, party_type=None, party=None):
 					"account_name": account_doc.name,
 					"message": _("Bank Account già esistente: {0}").format(account_doc.name),
 					"bank_info": {
-						"bank_name": frappe.db.get_value("Bank", account_doc.bank, "bank_name") if account_doc.bank else None,
+						"bank_name": frappe.db.get_value("Bank", account_doc.bank, "bank_name")
+						if account_doc.bank
+						else None,
 						"swift_number": None,
-						"country_code": iban_clean[:2]
-					}
+						"country_code": iban_clean[:2],
+					},
 				}
 
 		# Se company non è specificata, usa quella di default dell'utente
@@ -368,21 +355,11 @@ def validate_iban_api(iban, company=None, party_type=None, party=None):
 			company = frappe.defaults.get_user_default("Company")
 
 		if not company:
-			return {
-				"valid": False,
-				"message": _("Company non specificata. Impossibile validare IBAN.")
-			}
+			return {"valid": False, "message": _("Company non specificata. Impossibile validare IBAN.")}
 
 		bank_info = enrich_iban(iban_clean, company)
-		return {
-			"valid": True,
-			"already_exists": False,
-			"bank_info": bank_info
-		}
+		return {"valid": True, "already_exists": False, "bank_info": bank_info}
 
 	except Exception as e:
 		frappe.log_error(frappe.get_traceback(), "IBAN Validation Error")
-		return {
-			"valid": False,
-			"message": str(e)
-		}
+		return {"valid": False, "message": str(e)}

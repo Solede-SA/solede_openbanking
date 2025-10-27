@@ -70,8 +70,7 @@ def get_context(context):
 			context.reference_doctype = payment_doc.reference_doctype
 			context.reference_name = payment_doc.reference_name
 			context.reference_link = frappe.utils.get_url_to_form(
-				payment_doc.reference_doctype,
-				payment_doc.reference_name
+				payment_doc.reference_doctype, payment_doc.reference_name
 			)
 
 	except Exception as e:

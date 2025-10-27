@@ -3,19 +3,49 @@
 # License: GNU Affero General Public License v3 or later (AGPLv3+)
 # See https://www.gnu.org/licenses/agpl-3.0.html
 
-import frappe
 import json
+
+import frappe
 from frappe import _
+
 from solede_openbanking.api.client import ACubeAPIClient
 from solede_openbanking.api.iban_enrichment import create_bank_and_account_from_iban
 
-
 # Lista paesi SEPA (Single Euro Payments Area)
 SEPA_COUNTRIES = {
-	"AT", "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "ES", "FI",
-	"FR", "GB", "GR", "HR", "HU", "IE", "IS", "IT", "LI", "LT",
-	"LU", "LV", "MC", "MT", "NL", "NO", "PL", "PT", "RO", "SE",
-	"SI", "SK", "SM"
+	"AT",
+	"BE",
+	"BG",
+	"CY",
+	"CZ",
+	"DE",
+	"DK",
+	"EE",
+	"ES",
+	"FI",
+	"FR",
+	"GB",
+	"GR",
+	"HR",
+	"HU",
+	"IE",
+	"IS",
+	"IT",
+	"LI",
+	"LT",
+	"LU",
+	"LV",
+	"MC",
+	"MT",
+	"NL",
+	"NO",
+	"PL",
+	"PT",
+	"RO",
+	"SE",
+	"SI",
+	"SK",
+	"SM",
 }
 
 
@@ -68,10 +98,7 @@ def parse_payment_systems(systems_array):
 		if "sepa" in system_normalized:
 			has_sepa = True
 
-	return {
-		"has_sepa": has_sepa,
-		"has_sepa_instant": has_sepa_instant
-	}
+	return {"has_sepa": has_sepa, "has_sepa_instant": has_sepa_instant}
 
 
 @frappe.whitelist()
@@ -90,12 +117,8 @@ def get_supplier_bank_accounts(supplier_name):
 
 	accounts = frappe.get_all(
 		"Bank Account",
-		filters={
-			"party_type": "Supplier",
-			"party": supplier_name,
-			"disabled": 0
-		},
-		fields=["name", "account_name", "iban", "bank", "is_default"]
+		filters={"party_type": "Supplier", "party": supplier_name, "disabled": 0},
+		fields=["name", "account_name", "iban", "bank", "is_default"],
 	)
 
 	# Arricchisci con nome banca
@@ -149,24 +172,29 @@ def get_company_openbanking_accounts(company):
 							has_payment_support = parsed["has_sepa"] or parsed["has_sepa_instant"]
 
 				except Exception as e:
-					frappe.log_error(f"Error parsing account capabilities: {str(e)}", "Account Capabilities Error")
+					frappe.log_error(
+						f"Error parsing account capabilities: {e!s}", "Account Capabilities Error"
+					)
 
 			# Aggiungi TUTTI gli account, anche quelli senza supporto pagamenti
-			accounts.append({
-				"uuid": acc.uuid,
-				"iban": acc.iban,
-				"bank_display": acc.bank_display,
-				"balance_display": acc.balance_display,
-				"capabilities": capabilities,
-				"has_payment_support": has_payment_support
-			})
+			accounts.append(
+				{
+					"uuid": acc.uuid,
+					"iban": acc.iban,
+					"bank_display": acc.bank_display,
+					"balance_display": acc.balance_display,
+					"capabilities": capabilities,
+					"has_payment_support": has_payment_support,
+				}
+			)
 
 	return accounts
 
 
 @frappe.whitelist()
-def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, creditor_iban,
-						  creditor_name=None, use_instant=False):
+def initiate_sepa_payment(
+	reference_doctype, reference_name, account_uuid, creditor_iban, creditor_name=None, use_instant=False
+):
 	"""
 	Avvia un pagamento SEPA tramite Open Banking API.
 	DRY: Riutilizza ACubeAPIClient e la logica esistente.
@@ -224,15 +252,17 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 	# Valida che l'IBAN sia di un paese SEPA
 	if not is_sepa_country(creditor_iban_clean):
 		country_code = creditor_iban_clean[:2] if len(creditor_iban_clean) >= 2 else "??"
-		frappe.throw(_(
-			"L'IBAN fornito ({0}) appartiene al paese {1} che non fa parte dell'area SEPA. "
-			"I bonifici SEPA sono supportati solo per i seguenti paesi: "
-			"Austria, Belgio, Bulgaria, Cipro, Croazia, Danimarca, Estonia, Finlandia, Francia, "
-			"Germania, Grecia, Irlanda, Islanda, Italia, Lettonia, Liechtenstein, Lituania, "
-			"Lussemburgo, Malta, Monaco, Norvegia, Paesi Bassi, Polonia, Portogallo, "
-			"Repubblica Ceca, Romania, San Marino, Slovacchia, Slovenia, Spagna, Svezia, Ungheria, UK. "
-			"Per pagamenti internazionali verso altri paesi, utilizza un bonifico SWIFT."
-		).format(creditor_iban_clean[:10] + "...", country_code))
+		frappe.throw(
+			_(
+				"L'IBAN fornito ({0}) appartiene al paese {1} che non fa parte dell'area SEPA. "
+				"I bonifici SEPA sono supportati solo per i seguenti paesi: "
+				"Austria, Belgio, Bulgaria, Cipro, Croazia, Danimarca, Estonia, Finlandia, Francia, "
+				"Germania, Grecia, Irlanda, Islanda, Italia, Lettonia, Liechtenstein, Lituania, "
+				"Lussemburgo, Malta, Monaco, Norvegia, Paesi Bassi, Polonia, Portogallo, "
+				"Repubblica Ceca, Romania, San Marino, Slovacchia, Slovenia, Spagna, Svezia, Ungheria, UK. "
+				"Per pagamenti internazionali verso altri paesi, utilizza un bonifico SWIFT."
+			).format(creditor_iban_clean[:10] + "...", country_code)
+		)
 
 	# Determina sistema
 	system = "sepa-instant" if use_instant else "sepa"
@@ -243,7 +273,6 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 
 	settings = frappe.get_doc("OpenBanking Settings", company)
 	account_found = False
-	account_capabilities = None
 
 	for acc in settings.accounts:
 		if acc.uuid == account_uuid:
@@ -259,18 +288,18 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 
 						# Log systems disponibili
 						frappe.log_error(
-							f"Account UUID: {account_uuid}\n"
-							f"Systems: {systems}",
-							"Payment Systems Check"
+							f"Account UUID: {account_uuid}\nSystems: {systems}", "Payment Systems Check"
 						)
 
 						# Verifica se array vuoto
 						if not systems:
-							frappe.throw(_(
-								"L'account selezionato non supporta pagamenti. "
-								"Questo account è configurato solo per la lettura delle transazioni. "
-								"Seleziona un account con supporto pagamenti abilitato."
-							))
+							frappe.throw(
+								_(
+									"L'account selezionato non supporta pagamenti. "
+									"Questo account è configurato solo per la lettura delle transazioni. "
+									"Seleziona un account con supporto pagamenti abilitato."
+								)
+							)
 
 						# DRY: Usa funzione centralizzata
 						parsed = parse_payment_systems(systems)
@@ -279,32 +308,35 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 
 						# Verifica se l'account supporta il sistema richiesto
 						if use_instant and not has_sepa_instant:
-							frappe.throw(_(
-								"L'account selezionato non supporta bonifici SEPA Instant. "
-								"Sistemi disponibili: {0}. "
-								"Seleziona un altro account oppure deseleziona l'opzione Bonifico Istantaneo."
-							).format(", ".join(systems)))
+							frappe.throw(
+								_(
+									"L'account selezionato non supporta bonifici SEPA Instant. "
+									"Sistemi disponibili: {0}. "
+									"Seleziona un altro account oppure deseleziona l'opzione Bonifico Istantaneo."
+								).format(", ".join(systems))
+							)
 						elif not use_instant and not has_sepa:
-							frappe.throw(_(
-								"L'account selezionato non supporta bonifici SEPA standard. "
-								"Sistemi disponibili: {0}. "
-								"Seleziona un altro account."
-							).format(", ".join(systems)))
+							frappe.throw(
+								_(
+									"L'account selezionato non supporta bonifici SEPA standard. "
+									"Sistemi disponibili: {0}. "
+									"Seleziona un altro account."
+								).format(", ".join(systems))
+							)
 					else:
 						# Campo systems non trovato
-						frappe.throw(_(
-							"Impossibile verificare le capabilities di pagamento per questo account. "
-							"Il campo 'systems' non è presente nei dati dell'account."
-						))
+						frappe.throw(
+							_(
+								"Impossibile verificare le capabilities di pagamento per questo account. "
+								"Il campo 'systems' non è presente nei dati dell'account."
+							)
+						)
 
 				except json.JSONDecodeError as e:
-					frappe.log_error(f"Error parsing account raw_data: {str(e)}", "Account Validation Error")
+					frappe.log_error(f"Error parsing account raw_data: {e!s}", "Account Validation Error")
 					frappe.throw(_("Errore nella validazione capabilities dell'account"))
 			else:
-				frappe.log_error(
-					f"WARNING: No raw_data found for account {account_uuid}",
-					"No Raw Data"
-				)
+				frappe.log_error(f"WARNING: No raw_data found for account {account_uuid}", "No Raw Data")
 			break
 
 	if not account_found:
@@ -323,7 +355,7 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 	client = ACubeAPIClient(company)
 
 	# Prepara return URL e error URL da settings (DRY: riutilizzo settings già caricato)
-	callback_base_url = settings.callback_base_url.rstrip('/')
+	callback_base_url = settings.callback_base_url.rstrip("/")
 	return_url = f"{callback_base_url}/payment_callback"
 	error_url = f"{callback_base_url}/payment_callback"
 
@@ -336,7 +368,7 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 		"creditorIban": creditor_iban_clean,
 		"creditorName": creditor_name,
 		"returnUrl": return_url,
-		"errorUrl": error_url
+		"errorUrl": error_url,
 	}
 
 	# Chiama API
@@ -347,25 +379,27 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 		frappe.throw(_("API did not return payment UUID"))
 
 	# Crea record OpenBanking Payment
-	payment_doc = frappe.get_doc({
-		"doctype": "OpenBanking Payment",
-		"uuid": response.get("uuid"),
-		"payment_direction": "outbound",
-		"status": "pending",
-		"system": system,
-		"amount": amount,
-		"currency_code": "EUR",
-		"description": description,
-		"reference_doctype": reference_doctype,
-		"reference_name": reference_name,
-		"company": company,
-		"supplier": ref_doc.get("supplier"),
-		"creditor_name": creditor_name,
-		"creditor_iban": creditor_iban_clean,
-		"account_uuid": account_uuid,
-		"connect_url": response.get("connectUrl"),
-		"raw_response": json.dumps(response, indent=2)
-	})
+	payment_doc = frappe.get_doc(
+		{
+			"doctype": "OpenBanking Payment",
+			"uuid": response.get("uuid"),
+			"payment_direction": "outbound",
+			"status": "pending",
+			"system": system,
+			"amount": amount,
+			"currency_code": "EUR",
+			"description": description,
+			"reference_doctype": reference_doctype,
+			"reference_name": reference_name,
+			"company": company,
+			"supplier": ref_doc.get("supplier"),
+			"creditor_name": creditor_name,
+			"creditor_iban": creditor_iban_clean,
+			"account_uuid": account_uuid,
+			"connect_url": response.get("connectUrl"),
+			"raw_response": json.dumps(response, indent=2),
+		}
+	)
 
 	payment_doc.insert(ignore_permissions=True)
 	frappe.db.commit()
@@ -373,7 +407,7 @@ def initiate_sepa_payment(reference_doctype, reference_name, account_uuid, credi
 	return {
 		"payment_name": payment_doc.name,
 		"connect_url": response.get("connectUrl"),
-		"uuid": response.get("uuid")
+		"uuid": response.get("uuid"),
 	}
 
 
@@ -424,7 +458,7 @@ def get_payment_status(payment_uuid):
 		"payment_name": payment_doc.name,
 		"old_status": old_status,
 		"new_status": new_status,
-		"response": response
+		"response": response,
 	}
 
 
@@ -444,15 +478,12 @@ def create_or_get_supplier_bank_account(supplier_name, iban, account_name=None):
 	"""
 	# DRY: Riutilizzo totale della funzione esistente
 	bank_account = create_bank_and_account_from_iban(
-		iban=iban,
-		party_type="Supplier",
-		party=supplier_name,
-		account_name=account_name
+		iban=iban, party_type="Supplier", party=supplier_name, account_name=account_name
 	)
 
 	return {
 		"name": bank_account.name,
 		"account_name": bank_account.account_name,
 		"iban": bank_account.iban,
-		"bank": bank_account.bank
+		"bank": bank_account.bank,
 	}

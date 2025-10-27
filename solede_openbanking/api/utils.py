@@ -17,15 +17,16 @@ def handle_api_error(response, endpoint_url, operation_name):
 	"""
 	try:
 		error_data = response.json()
-		detail = error_data.get('detail', 'Unknown error')
-	except:
+		detail = error_data.get("detail", "Unknown error")
+	except Exception:
 		detail = f"HTTP {response.status_code}"
 
 	error_title = f"{operation_name} ({response.status_code})"
 	error_details = f"URL: {endpoint_url}\nDetail: {detail}"
 	frappe.log_error(error_details, error_title)
-	frappe.throw(_("Failed to {0} (HTTP {1}): {2}").format(
-		operation_name.lower(), response.status_code, detail))
+	frappe.throw(
+		_("Failed to {0} (HTTP {1}): {2}").format(operation_name.lower(), response.status_code, detail)
+	)
 
 
 def debug_log(operation_name, **kwargs):
@@ -40,7 +41,7 @@ def debug_log(operation_name, **kwargs):
 	print(f"DEBUG - {operation_name}")
 	for key, value in kwargs.items():
 		# Nasconde token per sicurezza
-		if key.lower() == 'token' and value:
+		if key.lower() == "token" and value:
 			print(f"{key}: {value[:50]}...")
 		else:
 			print(f"{key}: {value}")

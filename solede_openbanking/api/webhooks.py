@@ -3,12 +3,12 @@
 # License: GNU Affero General Public License v3 or later (AGPLv3+)
 # See https://www.gnu.org/licenses/agpl-3.0.html
 
-import frappe
 import json
-import requests
 from datetime import datetime
-from frappe import _
 
+import frappe
+import requests
+from frappe import _
 
 # Cache per la chiave pubblica (evita chiamate ripetute)
 _public_key_cache = None
@@ -64,11 +64,11 @@ def get_acube_public_key(fiscal_id):
 		from cryptography.hazmat.primitives import serialization
 
 		# Carica la chiave pubblica dal formato PEM
-		_public_key_cache = serialization.load_pem_public_key(public_key_pem.encode('utf-8'))
+		_public_key_cache = serialization.load_pem_public_key(public_key_pem.encode("utf-8"))
 
 		return _public_key_cache
 	except Exception as e:
-		frappe.log_error(f"Failed to fetch ACube public key: {str(e)}", "ACube Public Key Error")
+		frappe.log_error(f"Failed to fetch ACube public key: {e!s}", "ACube Public Key Error")
 		frappe.throw(_("Impossibile recuperare la chiave pubblica di ACube"))
 
 
@@ -95,12 +95,14 @@ def verify_http_signature(request, fiscal_id):
 
 		if not all([signature, signature_input, content_digest]):
 			missing = []
-			if not signature: missing.append("signature")
-			if not signature_input: missing.append("signature-input")
-			if not content_digest: missing.append("content-digest")
+			if not signature:
+				missing.append("signature")
+			if not signature_input:
+				missing.append("signature-input")
+			if not content_digest:
+				missing.append("content-digest")
 			frappe.log_error(
-				f"Missing required signature headers: {', '.join(missing)}",
-				"Webhook Signature Error"
+				f"Missing required signature headers: {', '.join(missing)}", "Webhook Signature Error"
 			)
 			return False
 
@@ -135,9 +137,7 @@ def verify_http_signature(request, fiscal_id):
 
 		# Verifica la firma
 		HTTPSignatureAuth.verify(
-			wrapped_request,
-			signature_algorithm=algorithms.ED25519,
-			key_resolver=KeyResolver(fiscal_id)
+			wrapped_request, signature_algorithm=algorithms.ED25519, key_resolver=KeyResolver(fiscal_id)
 		)
 
 		return True
@@ -145,27 +145,27 @@ def verify_http_signature(request, fiscal_id):
 	except ImportError:
 		frappe.log_error(
 			"requests-http-signature library not installed. Install with: bench pip install requests-http-signature",
-			"Webhook Signature Error"
+			"Webhook Signature Error",
 		)
 		# In sviluppo, permetti comunque (da rimuovere in produzione)
 		return True
 
 	except InvalidSignature as e:
 		frappe.log_error(
-			f"Invalid HTTP signature: {str(e)}\n"
+			f"Invalid HTTP signature: {e!s}\n"
 			f"Request URL: {request.url}\n"
 			f"Request Method: {request.method}\n"
 			f"Headers: {json.dumps(dict(request.headers), indent=2)}",
-			"Webhook Signature Error"
+			"Webhook Signature Error",
 		)
 		return False
 
 	except Exception as e:
 		frappe.log_error(
-			f"Signature verification error: {str(e)}\n"
+			f"Signature verification error: {e!s}\n"
 			f"Request URL: {request.url}\n"
 			f"Request Method: {request.method}",
-			"Webhook Signature Error"
+			"Webhook Signature Error",
 		)
 		return False
 
@@ -217,10 +217,13 @@ def acube_webhook():
 
 	except Exception as e:
 		error_msg = str(e)
-		frappe.log_error(f"Webhook Error: {error_msg}\nPayload: {json.dumps(payload) if 'payload' in locals() else 'N/A'}", "ACube Webhook Error")
+		frappe.log_error(
+			f"Webhook Error: {error_msg}\nPayload: {json.dumps(payload) if 'payload' in locals() else 'N/A'}",
+			"ACube Webhook Error",
+		)
 
 		# Aggiorna log con errore se esiste
-		if 'log' in locals():
+		if "log" in locals():
 			update_webhook_log(log, error_message=error_msg)
 
 		return {"success": False, "error": error_msg}
@@ -239,15 +242,17 @@ def create_webhook_log(webhook_type, fiscal_id, company, payload):
 	Returns:
 		frappe.Document: Il documento del log creato
 	"""
-	log = frappe.get_doc({
-		"doctype": "ACube Webhook Log",
-		"webhook_type": webhook_type,
-		"fiscal_id": fiscal_id,
-		"company": company,
-		"received_at": datetime.now(),
-		"payload": json.dumps(payload, indent=2),
-		"processed": 0
-	})
+	log = frappe.get_doc(
+		{
+			"doctype": "ACube Webhook Log",
+			"webhook_type": webhook_type,
+			"fiscal_id": fiscal_id,
+			"company": company,
+			"received_at": datetime.now(),
+			"payload": json.dumps(payload, indent=2),
+			"processed": 0,
+		}
+	)
 	log.insert(ignore_permissions=True)
 	return log
 
@@ -301,15 +306,13 @@ def handle_reconnect_webhook(payload, company, log_name):
 	urgency_map = {
 		0: {"days": 20, "urgency": "info"},
 		1: {"days": 10, "urgency": "warning"},
-		2: {"days": 0, "urgency": "critical"}
+		2: {"days": 0, "urgency": "critical"},
 	}
 	urgency_info = urgency_map.get(notice_level, {"days": 20, "urgency": "info"})
 
 	# Ottieni utenti con ruolo Accounts Manager
 	account_managers = frappe.get_all(
-		"Has Role",
-		filters={"role": "Accounts Manager", "parenttype": "User"},
-		fields=["parent"]
+		"Has Role", filters={"role": "Accounts Manager", "parenttype": "User"}, fields=["parent"]
 	)
 
 	recipients = [manager.parent for manager in account_managers]
@@ -333,9 +336,9 @@ def handle_reconnect_webhook(payload, company, log_name):
 <ul>
 <li><strong>Banca:</strong> {provider_name}</li>
 <li><strong>Scadenza consenso:</strong> {consent_expires_at}</li>
-<li><strong>Giorni rimanenti:</strong> {urgency_info['days']}</li>
+<li><strong>Giorni rimanenti:</strong> {urgency_info["days"]}</li>
 <li><strong>Fiscal ID:</strong> {fiscal_id}</li>
-<li><strong>Company:</strong> {company or 'N/A'}</li>
+<li><strong>Company:</strong> {company or "N/A"}</li>
 </ul>
 
 <p><strong>Azione richiesta:</strong><br>
@@ -350,15 +353,10 @@ Per rinnovare il consenso, clicca sul link sottostante:</p>
 	sent_count = 0
 	for recipient in recipients:
 		try:
-			frappe.sendmail(
-				recipients=[recipient],
-				subject=subject,
-				message=message,
-				delayed=False
-			)
+			frappe.sendmail(recipients=[recipient], subject=subject, message=message, delayed=False)
 			sent_count += 1
 		except Exception as e:
-			frappe.log_error(f"Failed to send email to {recipient}: {str(e)}", "Reconnect Email Error")
+			frappe.log_error(f"Failed to send email to {recipient}: {e!s}", "Reconnect Email Error")
 
 	return f"Reconnect notification sent to {sent_count}/{len(recipients)} Accounts Manager(s). Notice level: {notice_level}"
 
@@ -372,12 +370,16 @@ def handle_connect_webhook(payload, company, log_name):
 
 	if success:
 		updated_accounts = payload.get("updatedAccounts", [])
-		frappe.logger().info(f"Connect successful. Fiscal ID: {fiscal_id}. Updated accounts: {len(updated_accounts)}")
+		frappe.logger().info(
+			f"Connect successful. Fiscal ID: {fiscal_id}. Updated accounts: {len(updated_accounts)}"
+		)
 		return f"Connect successful. Fiscal ID: {fiscal_id}. Updated accounts: {len(updated_accounts)}"
 	else:
 		error_class = payload.get("errorClass", "Unknown")
 		error_message = payload.get("errorMessage", "No error message")
-		frappe.logger().error(f"Connect failed. Fiscal ID: {fiscal_id}. Error: {error_class} - {error_message}")
+		frappe.logger().error(
+			f"Connect failed. Fiscal ID: {fiscal_id}. Error: {error_class} - {error_message}"
+		)
 		return f"Connect failed. Fiscal ID: {fiscal_id}. Error: {error_class} - {error_message}"
 
 
@@ -388,7 +390,7 @@ def handle_payment_webhook(payload, company, log_name):
 	- Se completed: crea Payment Entry collegato a Purchase Invoice
 	- Se failed: notifica errore
 	"""
-	fiscal_id = payload.get("fiscalId")
+	payload.get("fiscalId")
 	payment_uuid = payload.get("paymentUuid")
 	payment_direction = payload.get("paymentDirection", "Unknown")
 	payment_status = payload.get("paymentStatus", "Unknown")
@@ -441,7 +443,7 @@ def handle_payment_webhook(payload, company, log_name):
 		return f"Payment {payment_direction} updated. Status: {old_status} -> {payment_status}. Amount: {amount} {currency}"
 
 	except Exception as e:
-		error_msg = f"Error processing payment webhook: {str(e)}"
+		error_msg = f"Error processing payment webhook: {e!s}"
 		frappe.log_error(frappe.get_traceback(), "Payment Webhook Error")
 		return error_msg
 
@@ -474,12 +476,18 @@ def create_payment_entry_from_payment(payment_doc):
 	# Recupera Mode of Payment da settings
 	settings = frappe.get_doc("OpenBanking Settings", payment_doc.company)
 	if not settings.payment_mode_of_payment:
-		frappe.throw(_("Mode of Payment non configurato in OpenBanking Settings per company {0}").format(payment_doc.company))
+		frappe.throw(
+			_("Mode of Payment non configurato in OpenBanking Settings per company {0}").format(
+				payment_doc.company
+			)
+		)
 
 	# Crea Payment Entry
 	from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 
-	payment_entry = get_payment_entry("Purchase Invoice", purchase_invoice.name, bank_amount=payment_doc.amount)
+	payment_entry = get_payment_entry(
+		"Purchase Invoice", purchase_invoice.name, bank_amount=payment_doc.amount
+	)
 
 	# Configura Payment Entry
 	payment_entry.paid_amount = payment_doc.amount
@@ -497,14 +505,15 @@ def create_payment_entry_from_payment(payment_doc):
 	payment_entry.submit()
 	frappe.db.commit()
 
-	frappe.logger().info(f"Payment Entry {payment_entry.name} created for Purchase Invoice {purchase_invoice.name}")
+	frappe.logger().info(
+		f"Payment Entry {payment_entry.name} created for Purchase Invoice {purchase_invoice.name}"
+	)
 
 	# Notifica utente
 	frappe.publish_realtime(
 		event="msgprint",
 		message=_("Payment Entry {0} created for Purchase Invoice {1}").format(
-			payment_entry.name,
-			purchase_invoice.name
+			payment_entry.name, purchase_invoice.name
 		),
-		user=purchase_invoice.owner
+		user=purchase_invoice.owner,
 	)
