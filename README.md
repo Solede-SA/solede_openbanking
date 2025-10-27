@@ -1,6 +1,6 @@
 # Solede OpenBanking
 
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Frappe](https://img.shields.io/badge/Frappe-v15+-orange.svg)](https://github.com/frappe/frappe)
 [![ERPNext](https://img.shields.io/badge/ERPNext-v15+-blue.svg)](https://github.com/frappe/erpnext)
 
@@ -626,7 +626,19 @@ Usa [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## 📄 Licenza
 
-MIT License - vedi il file [LICENSE](LICENSE) per dettagli.
+GNU Affero General Public License v3.0 - vedi il file [LICENSE](LICENSE) per dettagli.
+
+Copyright (C) 2024-2025 Solede SA and contributors
+
+Questa app è rilasciata sotto licenza AGPL v3. Se modifichi questa app e la offri come servizio web/SaaS, DEVI rendere disponibile il codice sorgente modificato a tutti gli utenti del servizio.
+
+Questo significa:
+- ✅ Puoi usare, modificare e distribuire liberamente
+- ✅ Puoi offrire come servizio commerciale (hosting/SaaS)
+- ✅ DEVI condividere le modifiche se offri come servizio web
+- ✅ Il codice derivato deve rimanere AGPL v3
+
+Per maggiori informazioni: https://www.gnu.org/licenses/agpl-3.0.html
 
 ## 👥 Autori
 

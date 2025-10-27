@@ -3,7 +3,7 @@ app_title = "Solede Openbanking"
 app_publisher = "Solede SA"
 app_description = "Integrazione Open Banking per gestire connessioni bancarie, transazioni e pagamenti tramite API PSD2"
 app_email = "info@solede.com"
-app_license = "mit"
+app_license = "AGPLv3"
 
 # Apps
 # ------------------

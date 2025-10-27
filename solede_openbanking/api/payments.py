@@ -1,5 +1,7 @@
-# Copyright (c) 2025, Solede and contributors
+# Copyright (c) 2024-2025, Solede SA and contributors
 # For license information, please see license.txt
+# License: GNU Affero General Public License v3 or later (AGPLv3+)
+# See https://www.gnu.org/licenses/agpl-3.0.html
 
 import frappe
 import json
