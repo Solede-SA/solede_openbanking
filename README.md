@@ -64,7 +64,7 @@ Frappe app per l'integrazione con ACube Open Banking API. Questa app permette di
 
 ## 🚀 Installazione
 
-### 1. Scarica l'app
+### 1. Scarica l'app da GitHub
 
 ```bash
 cd frappe-bench
