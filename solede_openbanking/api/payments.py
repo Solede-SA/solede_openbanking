@@ -214,6 +214,9 @@ def initiate_sepa_payment(
 			"uuid": UUID del pagamento
 		}
 	"""
+	# Converti use_instant a booleano: Frappe passa "0"/"1" come stringhe che sono sempre truthy
+	use_instant = frappe.parse_json(use_instant) if isinstance(use_instant, str) else bool(use_instant)
+
 	# Valida input
 	if not frappe.db.exists(reference_doctype, reference_name):
 		frappe.throw(_("{0} {1} not found").format(reference_doctype, reference_name))
