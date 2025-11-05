@@ -219,7 +219,7 @@ Le transazioni verranno importate in:
 #### Monitoraggio Pagamento
 
 - Nella Purchase Invoice vedrai lo status del pagamento
-- Clicca **OpenBanking > Aggiorna Status Pagamento** per controllare manualmente
+- Clicca **OpenBanking > Aggiorna Status** per controllare manualmente
 - Il documento OpenBanking Payment mostra tutti i dettagli (UUID, End-to-End ID, status)
 
 #### Stati Pagamento
@@ -229,6 +229,32 @@ Le transazioni verranno importate in:
 - **processing**: Pagamento in corso
 - **completed**: Pagamento completato con successo
 - **failed**: Pagamento fallito
+- **cancelled**: Pagamento annullato (solo lato sistema, non presso la banca)
+
+#### Gestione Pagamenti Bloccati (PENDING/FAILED)
+
+Se un pagamento rimane in stato `pending` o `failed`, hai a disposizione diverse opzioni:
+
+**1. Riprova Pagamento**
+- Riapre l'URL di autorizzazione presso la banca
+- Utile se l'utente non ha completato l'autorizzazione o la finestra si è chiusa
+- Clicca **OpenBanking > Riprova Pagamento** dalla Purchase Invoice
+- Si aprirà una nuova finestra per completare l'autorizzazione
+- Dopo aver completato, clicca **Aggiorna Status** per verificare l'esito
+
+**2. Annulla Pagamento**
+- Cambia lo stato del pagamento a `cancelled`
+- Sblocca la fattura permettendo di creare un nuovo pagamento
+- Clicca **OpenBanking > Annulla Pagamento** dalla Purchase Invoice
+- Conferma nel dialog (include warning che l'annullamento è solo locale)
+- Il bottone **Esegui Bonifico** riapparirà per creare un nuovo pagamento
+
+**3. Aggiorna Status**
+- Interroga l'API ACube per ottenere lo status aggiornato del pagamento
+- Clicca **OpenBanking > Aggiorna Status** dalla Purchase Invoice
+- Lo status locale verrà sincronizzato con quello del sistema bancario
+
+**Nota importante**: L'operazione "Annulla Pagamento" annulla SOLO il record locale nel sistema. Se il pagamento è già stato autorizzato presso la banca, NON verrà annullato automaticamente. In quel caso, dovrai procedere manualmente tramite il portale della banca.
 
 ### Visualizza Report
 
@@ -481,6 +507,11 @@ initiate_sepa_payment(reference_doctype, reference_name, account_uuid,
 get_payment_status(payment_uuid)
 # Aggiorna status pagamento da API
 
+cancel_payment(payment_name)
+# Annulla un pagamento OpenBanking (solo lato sistema)
+# Cambia status a 'cancelled' per sbloccare la fattura
+# Permette solo su pagamenti pending/requested/failed
+
 create_or_get_supplier_bank_account(supplier_name, iban, account_name)
 # Crea/recupera Bank Account fornitore da IBAN
 ```
@@ -565,6 +596,17 @@ class ACubeAPIClient:
 - Assicurati di aver configurato `payment_mode_of_payment` in OpenBanking Settings prima di testare
 - Il Mode of Payment deve essere impostato PRIMA del submit del Payment Entry
 
+### Pagamento bloccato in stato PENDING
+- Usa **Riprova Pagamento** per riaprire l'URL della banca e completare l'autorizzazione
+- Se il pagamento non può essere completato, usa **Annulla Pagamento** per sbloccare la fattura
+- Dopo l'annullamento, potrai creare un nuovo pagamento
+- Ricorda: l'annullamento è solo locale, verifica presso la banca che il pagamento non sia stato eseguito
+
+### Pagamento in stato FAILED
+- Controlla il campo `error_message` nel documento OpenBanking Payment per vedere il motivo
+- Usa **Annulla Pagamento** per rimuovere il pagamento fallito
+- Crea un nuovo pagamento risolvendo il problema (es. saldo insufficiente, IBAN errato)
+
 ## 🤝 Contributing
 
 I contributi sono benvenuti! Per contribuire:
@@ -603,7 +645,15 @@ Usa [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## 📝 Changelog
 
-### v1.1.0 (Current)
+### v1.2.0 (Current)
+- ✨ **Gestione Pagamenti Bloccati** - Nuove funzionalità per gestire pagamenti PENDING/FAILED
+- ✨ **Riprova Pagamento** - Riapri l'URL della banca per completare autorizzazioni incomplete
+- ✨ **Annulla Pagamento** - Annulla pagamenti locali per sbloccare fatture e crearne di nuovi
+- ✨ **Stati Pagamento Migliorati** - Aggiunto stato "cancelled" con indicatore grigio
+- ✨ **UX Migliorata** - Bottoni contestuali basati sullo stato del pagamento
+- 🔧 **API Cancel Payment** - Nuova funzione whitelisted per annullamento pagamenti
+
+### v1.1.0
 - ✨ **Pagamenti SEPA** - Bonifici SEPA da Purchase Invoice
 - ✨ **SEPA Instant** - Supporto bonifici istantanei
 - ✨ **IBAN Enrichment** - Creazione automatica Bank/Bank Account da IBAN

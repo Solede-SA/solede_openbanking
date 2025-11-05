@@ -3,19 +3,32 @@
 
 frappe.ui.form.on('Purchase Invoice', {
 	refresh: function(frm) {
-		// Mostra bottone solo se:
-		// 1. Documento è submitted
-		// 2. C'è ancora un outstanding_amount
-		// 3. NON esiste già un pagamento OpenBanking in corso
-		if (frm.doc.docstatus === 1 && frm.doc.outstanding_amount > 0 && !frm.doc.openbanking_payment) {
-			frm.add_custom_button(__('Esegui Bonifico'), function() {
-				initiate_payment_flow(frm);
-			}, __('OpenBanking'));
-		}
+		// Verifica se c'è un pagamento e il suo stato
+		if (frm.doc.openbanking_payment && frm.doc.openbanking_status) {
+			let payment_status = frm.doc.openbanking_status;
 
-		// Mostra status pagamento se esiste
-		if (frm.doc.openbanking_payment) {
+			// Mostra bottone "Esegui Bonifico" solo se:
+			// 1. Documento è submitted
+			// 2. C'è ancora un outstanding_amount
+			// 3. Il pagamento precedente è stato cancelled
+			if (frm.doc.docstatus === 1 && frm.doc.outstanding_amount > 0 && payment_status === 'cancelled') {
+				frm.add_custom_button(__('Esegui Bonifico'), function() {
+					initiate_payment_flow(frm);
+				}, __('OpenBanking'));
+			}
+
+			// Mostra status e bottoni azioni per pagamento esistente
 			show_payment_status(frm);
+		} else {
+			// Nessun pagamento esistente - mostra bottone principale
+			// 1. Documento è submitted
+			// 2. C'è ancora un outstanding_amount
+			// 3. NON esiste già un pagamento OpenBanking
+			if (frm.doc.docstatus === 1 && frm.doc.outstanding_amount > 0 && !frm.doc.openbanking_payment) {
+				frm.add_custom_button(__('Esegui Bonifico'), function() {
+					initiate_payment_flow(frm);
+				}, __('OpenBanking'));
+			}
 		}
 	}
 });
@@ -358,27 +371,52 @@ function show_payment_status(frm) {
 		args: {
 			doctype: 'OpenBanking Payment',
 			filters: { name: frm.doc.openbanking_payment },
-			fieldname: ['status', 'system', 'uuid']
+			fieldname: ['status', 'system', 'uuid', 'connect_url']
 		},
 		callback: function(r) {
 			if (r.message) {
 				let status = r.message.status;
+				let uuid = r.message.uuid;
+				let connect_url = r.message.connect_url;
 				let indicator = 'blue';
 
 				if (status === 'completed') {
 					indicator = 'green';
 				} else if (status === 'failed') {
 					indicator = 'red';
+				} else if (status === 'cancelled') {
+					indicator = 'grey';
 				} else if (status === 'processing') {
 					indicator = 'orange';
 				}
 
 				frm.dashboard.add_indicator(__('Pagamento: {0}', [status.toUpperCase()]), indicator);
 
-				// Bottone per refresh status
-				frm.add_custom_button(__('Aggiorna Status Pagamento'), function() {
-					refresh_payment_status(frm, r.message.uuid);
-				}, __('OpenBanking'));
+				// Bottoni basati sullo stato del pagamento
+				if (status === 'pending' || status === 'requested' || status === 'failed') {
+					// Bottone per riprovare il pagamento (riapre URL banca)
+					if (connect_url) {
+						frm.add_custom_button(__('Riprova Pagamento'), function() {
+							retry_payment(frm, connect_url);
+						}, __('OpenBanking'));
+					}
+
+					// Bottone per annullare il pagamento
+					frm.add_custom_button(__('Annulla Pagamento'), function() {
+						cancel_payment_dialog(frm);
+					}, __('OpenBanking'));
+
+					// Bottone per refresh status
+					frm.add_custom_button(__('Aggiorna Status'), function() {
+						refresh_payment_status(frm, uuid);
+					}, __('OpenBanking'));
+				} else if (status === 'processing') {
+					// Solo refresh per pagamenti in processing
+					frm.add_custom_button(__('Aggiorna Status'), function() {
+						refresh_payment_status(frm, uuid);
+					}, __('OpenBanking'));
+				}
+				// Per completed e cancelled non servono azioni
 			}
 		}
 	});
@@ -398,6 +436,62 @@ function refresh_payment_status(frm, payment_uuid) {
 					message: __('Status aggiornato: {0}', [r.message.new_status]),
 					indicator: 'blue'
 				}, 5);
+				frm.reload_doc();
+			}
+		}
+	});
+}
+
+function retry_payment(frm, connect_url) {
+	// Riapre l'URL di connessione alla banca per completare l'autorizzazione
+	if (!connect_url) {
+		frappe.msgprint({
+			title: __('Errore'),
+			message: __('URL di connessione non disponibile per questo pagamento'),
+			indicator: 'red'
+		});
+		return;
+	}
+
+	frappe.confirm(
+		__('Verrà aperta una nuova finestra per autorizzare il pagamento presso la banca. Continuare?'),
+		function() {
+			// Apri URL in nuova finestra
+			window.open(connect_url, '_blank', 'width=800,height=600');
+
+			frappe.show_alert({
+				message: __('Finestra banca aperta. Completa l\'autorizzazione e poi aggiorna lo status.'),
+				indicator: 'blue'
+			}, 10);
+		}
+	);
+}
+
+function cancel_payment_dialog(frm) {
+	// Dialog di conferma per annullare il pagamento
+	frappe.confirm(
+		__('Sei sicuro di voler annullare questo pagamento? Questa azione cambierà lo stato del pagamento a "cancelled" e ti permetterà di crearne uno nuovo.<br><br><strong>Nota:</strong> Questa operazione NON annulla il pagamento presso la banca se già autorizzato.'),
+		function() {
+			// Conferma - procedi con cancellazione
+			cancel_payment_action(frm);
+		}
+	);
+}
+
+function cancel_payment_action(frm) {
+	frappe.call({
+		method: 'solede_openbanking.api.payments.cancel_payment',
+		args: {
+			payment_name: frm.doc.openbanking_payment
+		},
+		freeze: true,
+		freeze_message: __('Annullamento pagamento in corso...'),
+		callback: function(r) {
+			if (r.message && r.message.success) {
+				frappe.show_alert({
+					message: r.message.message,
+					indicator: 'green'
+				}, 7);
 				frm.reload_doc();
 			}
 		}

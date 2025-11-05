@@ -490,3 +490,46 @@ def create_or_get_supplier_bank_account(supplier_name, iban, account_name=None):
 		"iban": bank_account.iban,
 		"bank": bank_account.bank,
 	}
+
+
+@frappe.whitelist()
+def cancel_payment(payment_name):
+	"""
+	Annulla un pagamento OpenBanking cambiando il suo stato a 'cancelled'.
+	Permette di sbloccare la fattura per creare un nuovo pagamento.
+
+	Args:
+		payment_name: Nome del documento OpenBanking Payment
+
+	Returns:
+		dict: Risultato dell'operazione
+	"""
+	if not payment_name:
+		frappe.throw(_("Payment name is required"))
+
+	if not frappe.db.exists("OpenBanking Payment", payment_name):
+		frappe.throw(_("OpenBanking Payment {0} not found").format(payment_name))
+
+	payment_doc = frappe.get_doc("OpenBanking Payment", payment_name)
+
+	# Valida che il pagamento sia in uno stato annullabile
+	if payment_doc.status in ["completed", "processing"]:
+		frappe.throw(
+			_("Cannot cancel payment in status {0}. Only pending, requested, or failed payments can be cancelled.").format(
+				payment_doc.status
+			)
+		)
+
+	# Cambia status a cancelled
+	old_status = payment_doc.status
+	payment_doc.status = "cancelled"
+	payment_doc.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	return {
+		"success": True,
+		"payment_name": payment_doc.name,
+		"old_status": old_status,
+		"new_status": "cancelled",
+		"message": _("Payment cancelled successfully. You can now create a new payment."),
+	}
