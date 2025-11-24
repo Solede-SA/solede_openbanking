@@ -284,7 +284,7 @@ def determine_webhook_type(payload):
 		return "reconnect"
 	elif "success" in payload and ("updatedAccounts" in payload or "errorClass" in payload):
 		return "connect"
-	elif "paymentDirection" in payload or "paymentStatus" in payload:
+	elif "payment" in payload:
 		return "payment"
 	else:
 		return "unknown"
@@ -390,12 +390,12 @@ def handle_payment_webhook(payload, company, log_name):
 	- Se completed: crea Payment Entry collegato a Purchase Invoice
 	- Se failed: notifica errore
 	"""
-	payload.get("fiscalId")
-	payment_uuid = payload.get("paymentUuid")
-	payment_direction = payload.get("paymentDirection", "Unknown")
-	payment_status = payload.get("paymentStatus", "Unknown")
-	amount = payload.get("amount", 0)
-	currency = payload.get("currencyCode", "EUR")
+	payment_data = payload["payment"]
+	payment_uuid = payment_data["uuid"]
+	payment_direction = payment_data["direction"]
+	payment_status = payment_data["status"]
+	amount = payment_data["amount"]
+	currency = payment_data["currencyCode"]
 
 	# Trova OpenBanking Payment per UUID
 	payment_name = frappe.db.get_value("OpenBanking Payment", {"uuid": payment_uuid}, "name")
@@ -427,7 +427,7 @@ def handle_payment_webhook(payload, company, log_name):
 			return f"Payment {payment_direction} failed. Status: {payment_status}. Amount: {amount} {currency}. Error: {error_class} - {error_message}"
 
 		# Aggiorna campi dal payload
-		payment_doc.end_to_end_id = payload.get("endToEndId")
+		payment_doc.end_to_end_id = payment_data["endToEndId"]
 		payment_doc.raw_response = json.dumps(payload, indent=2)
 		payment_doc.save(ignore_permissions=True)
 		frappe.db.commit()
