@@ -56,11 +56,10 @@
   },
   {
    "fieldname": "status",
-   "fieldtype": "Select",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Status",
-   "options": "pending\nrequested\nprocessing\ncompleted\nfailed\ncancelled",
    "reqd": 1
   },
   {
