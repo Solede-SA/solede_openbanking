@@ -293,6 +293,42 @@ frappe.ui.form.on("OpenBanking Settings", {
                 frm.fields_dict.accounts.grid.add_custom_button(__('Delete Selected'), function() {
                     OpenBankingHelpers.delete_selected_accounts(frm);
                 });
+
+                // Bottone Renew Consent per account con consenso in scadenza (<30 giorni)
+                frm.fields_dict.accounts.grid.add_custom_button(__('Renew Consent'), function() {
+                    const selected = frm.fields_dict.accounts.grid.get_selected();
+
+                    if (selected.length === 0) {
+                        frappe.msgprint(__('Please select an account to renew consent'));
+                        return;
+                    }
+                    if (selected.length > 1) {
+                        frappe.msgprint(__('Please select only one account. Note: renewing one account will renew all accounts from the same bank.'));
+                        return;
+                    }
+
+                    const account = frm.doc.accounts.find(acc => acc.name === selected[0]);
+                    if (!account) return;
+
+                    const daysRemaining = OpenBankingHelpers.get_consent_days_remaining(account);
+
+                    if (daysRemaining === null) {
+                        frappe.msgprint(__('Cannot determine consent expiry date for this account'));
+                        return;
+                    }
+
+                    if (daysRemaining > 30) {
+                        frappe.msgprint(__('Consent renewal is only available when less than 30 days remain. This account has {0} days remaining.', [daysRemaining]));
+                        return;
+                    }
+
+                    frappe.confirm(
+                        __('Renew consent for account {0}?<br><br>Note: This will also renew consent for all other accounts from the same bank.', [account.iban]),
+                        () => {
+                            OpenBankingHelpers.renew_consent(frm, account);
+                        }
+                    );
+                });
             }
         }
     }

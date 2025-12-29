@@ -331,5 +331,58 @@ window.OpenBankingHelpers = {
 				}
 			}
 		});
+	},
+
+	/**
+	 * Calcola i giorni rimanenti alla scadenza del consenso
+	 * @param {object} account - Riga account dalla child table
+	 * @returns {number|null} - Giorni rimanenti o null se non calcolabile
+	 */
+	get_consent_days_remaining: function(account) {
+		if (!account.raw_data) return null;
+
+		try {
+			const data = JSON.parse(account.raw_data);
+			const expiresAt = data.consentExpiresAt;
+			if (!expiresAt) return null;
+
+			const expiryDate = new Date(expiresAt);
+			const today = new Date();
+			const diffTime = expiryDate - today;
+			const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+			return diffDays;
+		} catch (e) {
+			return null;
+		}
+	},
+
+	/**
+	 * Rinnova il consenso per un account specifico
+	 * @param {object} frm - Form object
+	 * @param {object} account - Account da rinnovare
+	 */
+	renew_consent: function(frm, account) {
+		frappe.call({
+			method: "solede_openbanking.api.business_registry.reconnect_account",
+			args: {
+				company: frm.doc.company,
+				account_uuid: account.uuid
+			},
+			freeze: true,
+			freeze_message: __("Requesting consent renewal..."),
+			callback: function(r) {
+				if (r.message && r.message.success) {
+					// Apri l'URL in nuova finestra
+					window.open(r.message.reconnect_url, '_blank');
+
+					frappe.msgprint({
+						title: __('Consent Renewal'),
+						message: __('A new window has been opened. Please complete the consent renewal process there.<br><br>After completing, click "Refresh Accounts" to update the consent dates.'),
+						indicator: 'blue'
+					});
+				}
+			}
+		});
 	}
 };

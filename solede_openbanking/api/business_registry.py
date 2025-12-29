@@ -329,6 +329,35 @@ def delete_account(company, uuid):
 
 
 @frappe.whitelist()
+def reconnect_account(company, account_uuid):
+	"""
+	Avvia il processo di rinnovo del consenso per un account bancario.
+	Restituisce un URL dove l'utente può ri-autorizzare l'accesso.
+	Nota: rinnovando un account si rinnovano tutti gli account della stessa banca.
+
+	Args:
+	    company: Nome della company
+	    account_uuid: UUID dell'account da riconnettere
+
+	Returns:
+	    dict: {"success": True, "reconnect_url": "..."}
+	"""
+	client = ACubeAPIClient(company)
+
+	response_data = client.get(f"accounts/{account_uuid}/reconnect", "Reconnect Account")
+
+	reconnect_url = response_data.get("reconnectUrl")
+	if not reconnect_url:
+		frappe.throw(_("Reconnect URL not found in response"))
+
+	return {
+		"success": True,
+		"reconnect_url": reconnect_url,
+		"message": _("Reconnect request created successfully"),
+	}
+
+
+@frappe.whitelist()
 def get_transactions(company, account_uuid=None, from_date=None, to_date=None, page=1, items_per_page=30):
 	"""
 	Recupera le transazioni bancarie dal Business Registry ACube.
