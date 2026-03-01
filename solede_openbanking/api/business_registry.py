@@ -106,28 +106,28 @@ def validate_password(password):
 
 
 @frappe.whitelist()
-def create_business_registry(company, password):
+def create_business_registry(company, business_email):
 	"""
 	Crea un nuovo Business Registry per l'azienda specificata.
 	Nota: questa operazione comporta un addebito.
 
 	Args:
 	    company: Nome della company
-	    password: Password per il nuovo account Business Registry (non usata in questa versione)
+	    business_email: Email per il Business Registry (riceverà alert e notifiche)
 	"""
 	client = ACubeAPIClient(company)
 
 	if not client.company_doc.company_name:
 		frappe.throw(_("Company name not found in Company {0}").format(company))
 
-	if not client.settings.email:
-		frappe.throw(_("Email not configured in OpenBanking Settings"))
+	if not business_email:
+		frappe.throw(_("Business email is required"))
 
 	# Prepara il payload per creare il Business Registry
 	payload = {
 		"fiscalId": client.fiscal_id,
 		"businessName": client.company_doc.company_name,
-		"email": client.settings.email,
+		"email": business_email,
 		"emailAlerts": True,
 		"locale": "it",
 		"country": "IT",

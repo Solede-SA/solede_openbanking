@@ -89,18 +89,29 @@ frappe.ui.form.on("OpenBanking Settings", {
             // Bottone per creare Business Registry (solo se non ancora creato)
             if (!frm.doc.business_registry_created) {
                 frm.add_custom_button(__("Create Business Registry"), () => {
-                    frappe.confirm(
-                        __('Creating a Business Registry will incur a fee. Do you want to continue?'),
-                        () => {
-                            OpenBankingHelpers.call_api(
-                                "solede_openbanking.api.business_registry.create_business_registry",
-                                { company: frm.doc.company, password: "" },
-                                "Creating Business Registry...",
-                                (r) => frm.reload_doc(),
-                                "Business Registry created successfully"
-                            );
+                    frappe.prompt([
+                        {
+                            fieldname: 'business_email',
+                            fieldtype: 'Data',
+                            options: 'Email',
+                            label: __('Business Email'),
+                            description: __('Email for this Business Registry (will receive alerts and notifications)'),
+                            reqd: 1
                         }
-                    );
+                    ], (values) => {
+                        frappe.confirm(
+                            __('Creating a Business Registry will incur a fee. Do you want to continue?'),
+                            () => {
+                                OpenBankingHelpers.call_api(
+                                    "solede_openbanking.api.business_registry.create_business_registry",
+                                    { company: frm.doc.company, business_email: values.business_email },
+                                    "Creating Business Registry...",
+                                    (r) => frm.reload_doc(),
+                                    "Business Registry created successfully"
+                                );
+                            }
+                        );
+                    }, __('Create Business Registry'), __('Continue'));
                 }, __("Actions"));
             }
 
