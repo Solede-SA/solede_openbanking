@@ -142,7 +142,7 @@ Il token ha validità di 24 ore e viene rinnovato automaticamente quando necessa
 ### Step 2: Crea Business Registry
 
 1. Clicca **Actions > Create Business Registry**
-2. Inserisci una password per il Business Registry (requisiti: maiuscola, minuscola, numero, carattere speciale)
+2. Inserisci l'**email dell'azienda** da associare al Business Registry (riceverà alert e notifiche)
 3. Conferma la creazione
 
 ⚠️ **Attenzione**: Questa operazione comporta un addebito da parte di ACube.
@@ -150,7 +150,7 @@ Il token ha validità di 24 ore e viene rinnovato automaticamente quando necessa
 Il sistema userà:
 - **Fiscal ID**: dalla Partita IVA della Company
 - **Business Name**: dal nome della Company
-- **Email**: dalle OpenBanking Settings
+- **Email**: quella inserita dall'operatore nel dialog (specifica per l'azienda, diversa dalle credenziali ACube)
 
 ### Step 3: Connetti Banca
 
@@ -468,8 +468,8 @@ decode_token_payload(token)
 ### business_registry.py
 
 ```python
-create_business_registry(company, password)
-# Crea Business Registry
+create_business_registry(company, business_email)
+# Crea Business Registry con email specifica per l'azienda
 
 get_business_registry_info(company)
 # Recupera info Business Registry
