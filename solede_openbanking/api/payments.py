@@ -276,10 +276,12 @@ def initiate_sepa_payment(
 
 	settings = frappe.get_doc("OpenBanking Settings", company)
 	account_found = False
+	account_iban = None
 
 	for acc in settings.accounts:
 		if acc.uuid == account_uuid:
 			account_found = True
+			account_iban = acc.iban
 			# Parse capabilities
 			if acc.raw_data:
 				try:
@@ -381,6 +383,15 @@ def initiate_sepa_payment(
 	if not response or "uuid" not in response:
 		frappe.throw(_("API did not return payment UUID"))
 
+	# Cerca il Bank Account ERPNext dall'IBAN dell'account usato
+	bank_account = None
+	if account_iban:
+		bank_account = frappe.db.get_value(
+			"Bank Account",
+			{"iban": account_iban, "company": company, "disabled": 0},
+			"name",
+		)
+
 	# Crea record OpenBanking Payment
 	payment_doc = frappe.get_doc(
 		{
@@ -399,6 +410,7 @@ def initiate_sepa_payment(
 			"creditor_name": creditor_name,
 			"creditor_iban": creditor_iban_clean,
 			"account_uuid": account_uuid,
+			"bank_account": bank_account,
 			"connect_url": response.get("connectUrl"),
 			"raw_response": json.dumps(response, indent=2),
 		}

@@ -482,21 +482,12 @@ def create_payment_entry_from_payment(payment_doc):
 			)
 		)
 
-	# Trova il Bank Account ERPNext corretto dall'IBAN usato per il pagamento
+	# Recupera il GL account dal Bank Account già popolato sull'OpenBanking Payment
 	bank_gl_account = None
-	if payment_doc.account_uuid:
-		# Cerca l'IBAN nell'OpenBanking Account della company
-		for acc in settings.accounts:
-			if acc.uuid == payment_doc.account_uuid and acc.iban:
-				# Trova il Bank Account ERPNext con lo stesso IBAN
-				bank_account_name = frappe.db.get_value(
-					"Bank Account",
-					{"iban": acc.iban, "company": payment_doc.company},
-					"account"
-				)
-				if bank_account_name:
-					bank_gl_account = bank_account_name
-				break
+	if payment_doc.bank_account:
+		bank_gl_account = frappe.db.get_value(
+			"Bank Account", payment_doc.bank_account, "account"
+		)
 
 	# Crea Payment Entry
 	from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
