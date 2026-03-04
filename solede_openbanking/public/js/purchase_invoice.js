@@ -380,7 +380,7 @@ function show_payment_status(frm) {
 				let connect_url = r.message.connect_url;
 				let indicator = 'blue';
 
-				if (status === 'completed') {
+				if (status === 'confirmed') {
 					indicator = 'green';
 				} else if (status === 'failed') {
 					indicator = 'red';
@@ -416,7 +416,7 @@ function show_payment_status(frm) {
 						refresh_payment_status(frm, uuid);
 					}, __('OpenBanking'));
 				}
-				// Per completed e cancelled non servono azioni
+				// Per confirmed e cancelled non servono azioni
 			}
 		}
 	});

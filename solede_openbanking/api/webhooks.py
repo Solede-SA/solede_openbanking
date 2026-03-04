@@ -427,13 +427,13 @@ def handle_payment_webhook(payload, company, log_name):
 			return f"Payment {payment_direction} failed. Status: {payment_status}. Amount: {amount} {currency}. Error: {error_class} - {error_message}"
 
 		# Aggiorna campi dal payload
-		payment_doc.end_to_end_id = payment_data["endToEndId"]
+		payment_doc.end_to_end_id = payment_data.get("endToEndId")
 		payment_doc.raw_response = json.dumps(payload, indent=2)
 		payment_doc.save(ignore_permissions=True)
 		frappe.db.commit()
 
-		# Se completed, crea Payment Entry
-		if payment_status.lower() == "completed" and payment_doc.reference_doctype == "Purchase Invoice":
+		# Se confirmed (pagamento andato a buon fine), crea Payment Entry
+		if payment_status.lower() == "confirmed" and payment_doc.reference_doctype == "Purchase Invoice":
 			create_payment_entry_from_payment(payment_doc)
 
 		frappe.logger().info(
@@ -482,12 +482,33 @@ def create_payment_entry_from_payment(payment_doc):
 			)
 		)
 
+	# Trova il Bank Account ERPNext corretto dall'IBAN usato per il pagamento
+	bank_gl_account = None
+	if payment_doc.account_uuid:
+		# Cerca l'IBAN nell'OpenBanking Account della company
+		for acc in settings.accounts:
+			if acc.uuid == payment_doc.account_uuid and acc.iban:
+				# Trova il Bank Account ERPNext con lo stesso IBAN
+				bank_account_name = frappe.db.get_value(
+					"Bank Account",
+					{"iban": acc.iban, "company": payment_doc.company},
+					"account"
+				)
+				if bank_account_name:
+					bank_gl_account = bank_account_name
+				break
+
 	# Crea Payment Entry
 	from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 
 	payment_entry = get_payment_entry(
-		"Purchase Invoice", purchase_invoice.name, bank_amount=payment_doc.amount
+		"Purchase Invoice", purchase_invoice.name,
+		bank_account=bank_gl_account,
+		bank_amount=payment_doc.amount
 	)
+
+	# Rimuovi deductions auto (es. early payment discount) che potrebbero avere account vuoto
+	payment_entry.deductions = []
 
 	# Configura Payment Entry
 	payment_entry.paid_amount = payment_doc.amount

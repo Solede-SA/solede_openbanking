@@ -513,7 +513,7 @@ def cancel_payment(payment_name):
 	payment_doc = frappe.get_doc("OpenBanking Payment", payment_name)
 
 	# Valida che il pagamento sia in uno stato annullabile
-	if payment_doc.status in ["completed", "processing"]:
+	if payment_doc.status in ["confirmed", "processing"]:
 		frappe.throw(
 			_("Cannot cancel payment in status {0}. Only pending, requested, or failed payments can be cancelled.").format(
 				payment_doc.status

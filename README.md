@@ -37,7 +37,8 @@ Frappe app per l'integrazione con ACube Open Banking API. Questa app permette di
 - **SEPA Instant** - Supporto bonifici istantanei (completati in pochi secondi)
 - **Validazione SEPA** - Controllo automatico paese IBAN per bonifici SEPA
 - **IBAN Enrichment** - Creazione automatica Bank/Bank Account da IBAN
-- **Payment Entry Automatico** - Creazione automatica Payment Entry da webhook
+- **Payment Entry Automatico** - Creazione automatica Payment Entry da webhook con status `confirmed`
+- **Associazione Banca Corretta** - Il Payment Entry usa il conto bancario effettivo del pagamento (lookup IBAN)
 - **Callback Page** - Pagina di ritorno dopo autorizzazione pagamento
 - **Mode of Payment Configurabile** - Modalità pagamento configurabile per ogni company
 - **Tracking Completo** - Tracciamento UUID e End-to-End ID per ogni pagamento
@@ -227,7 +228,7 @@ Le transazioni verranno importate in:
 - **pending**: Pagamento inizializzato, in attesa autorizzazione
 - **requested**: Autorizzazione completata, in elaborazione
 - **processing**: Pagamento in corso
-- **completed**: Pagamento completato con successo
+- **confirmed**: Pagamento confermato dalla banca (Payment Entry creato automaticamente)
 - **failed**: Pagamento fallito
 - **cancelled**: Pagamento annullato (solo lato sistema, non presso la banca)
 
@@ -404,7 +405,7 @@ Tracciamento pagamenti SEPA.
 **Campi principali:**
 - `uuid` (Data): UUID pagamento da ACube
 - `payment_direction` (Select): outbound/inbound
-- `status` (Select): pending/requested/processing/completed/failed/cancelled
+- `status` (Data): pending/requested/processing/confirmed/failed/cancelled
 - `system` (Select): sepa/sepa-instant
 - `amount` (Currency): Importo pagamento
 - `currency_code` (Data): Valuta (default EUR)
@@ -437,6 +438,11 @@ Log di tutte le transazioni importate.
 - `bank_transaction` (Link): Link a Bank Transaction
 - `error_message` (Text): Messaggio errore se fallita
 - `raw_data` (Long Text): JSON completo
+
+### Custom Fields su Payment Entry
+L'app aggiunge campi custom a Payment Entry:
+
+- `custom_openbanking_payment` (Link): Collegamento al documento OpenBanking Payment
 
 ### Custom Fields su Bank Transaction
 L'app aggiunge campi custom a Bank Transaction:
@@ -525,10 +531,11 @@ acube_webhook()
 
 handle_payment_webhook(payload, company, log_name)
 # Gestisce webhook pagamento
-# Crea automaticamente Payment Entry se completed
+# Crea automaticamente Payment Entry se status = "confirmed"
 
 create_payment_entry_from_payment(payment_doc)
 # Crea Payment Entry da OpenBanking Payment
+# Associa il conto bancario corretto (lookup IBAN da account_uuid)
 # Usa Mode of Payment da settings
 ```
 
@@ -588,9 +595,10 @@ class ACubeAPIClient:
 
 ### Payment Entry non viene creato automaticamente
 - Verifica che `payment_mode_of_payment` sia configurato in OpenBanking Settings
-- Controlla ACube Webhook Log per verificare ricezione webhook
-- Controlla Error Log per eccezioni durante creazione Payment Entry
+- Controlla ACube Webhook Log per verificare ricezione webhook (lo status atteso da ACube e' `confirmed`)
+- Controlla Error Log (cerca "Payment Webhook Error") per eccezioni durante creazione Payment Entry
 - Verifica che Purchase Invoice abbia ancora outstanding_amount > 0
+- Verifica che il Bank Account ERPNext abbia l'IBAN corrispondente all'account OpenBanking usato per il pagamento
 
 ### Errore "Not allowed to change Mode of Payment after submission"
 - Assicurati di aver configurato `payment_mode_of_payment` in OpenBanking Settings prima di testare
@@ -645,7 +653,14 @@ Usa [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## 📝 Changelog
 
-### v1.2.0 (Current)
+### v1.3.0 (Current)
+- 🐛 **Fix Payment Entry automatico** - Corretto status webhook da "completed" a "confirmed" (allineamento con API ACube)
+- ✨ **Associazione banca corretta** - Il Payment Entry usa il conto bancario effettivo del pagamento (lookup IBAN da account_uuid)
+- ✨ **Custom field Payment Entry** - Aggiunto campo `custom_openbanking_payment` su Payment Entry per tracciabilità
+- 🐛 **Fix KeyError endToEndId** - Accesso sicuro al campo endToEndId nel webhook payload
+- 🐛 **Fix deductions vuote** - Pulizia deductions auto (es. early payment discount) che potevano bloccare la creazione del Payment Entry
+
+### v1.2.0
 - ✨ **Gestione Pagamenti Bloccati** - Nuove funzionalità per gestire pagamenti PENDING/FAILED
 - ✨ **Riprova Pagamento** - Riapri l'URL della banca per completare autorizzazioni incomplete
 - ✨ **Annulla Pagamento** - Annulla pagamenti locali per sbloccare fatture e crearne di nuovi
@@ -678,7 +693,7 @@ Usa [Conventional Commits](https://www.conventionalcommits.org/):
 
 GNU Affero General Public License v3.0 - vedi il file [LICENSE](LICENSE) per dettagli.
 
-Copyright (C) 2024-2025 Solede SA and contributors
+Copyright (C) 2024-2026 Solede SA and contributors
 
 Questa app è rilasciata sotto licenza AGPL v3. Se modifichi questa app e la offri come servizio web/SaaS, DEVI rendere disponibile il codice sorgente modificato a tutti gli utenti del servizio.
 
