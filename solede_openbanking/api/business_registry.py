@@ -226,29 +226,44 @@ def get_accounts(company):
 	try:
 		accounts_data = client.get(f"business-registry/{client.fiscal_id}/accounts", "Get Accounts")
 
-		# Pulisci la tabella esistente
-		client.settings.accounts = []
+		# Mappa account esistenti per uuid
+		existing_by_uuid = {acc.uuid: acc for acc in client.settings.accounts}
+		api_uuids = set()
 
-		# Aggiungi gli account alla child table
-		# Salviamo uuid, iban, enabled, raw_data e i campi display formattati
 		for account in accounts_data:
-			client.settings.append(
-				"accounts",
-				{
-					"uuid": account.get("uuid"),
-					"iban": account.get("iban"),
-					"bank_display": account.get("providerName"),
-					"balance_display": format_currency(
-						account.get("balance"), account.get("currencyCode", "EUR")
-					),
-					"consent_expires_display": format_datetime_display(account.get("consentExpiresAt")),
-					"enabled": 1 if account.get("enabled") else 0,
-					"raw_data": json.dumps(account, indent=2),
-				},
-			)
+			uuid = account.get("uuid")
+			api_uuids.add(uuid)
 
-		# Salva il documento
-		client.settings.save(ignore_permissions=True)
+			values = {
+				"iban": account.get("iban"),
+				"bank_display": account.get("providerName"),
+				"balance_display": format_currency(
+					account.get("balance"), account.get("currencyCode", "EUR")
+				),
+				"consent_expires_display": format_datetime_display(account.get("consentExpiresAt")),
+				"enabled": 1 if account.get("enabled") else 0,
+				"raw_data": json.dumps(account, indent=2),
+			}
+
+			if uuid in existing_by_uuid:
+				# Aggiorna solo i campi che cambiano, senza toccare il parent
+				frappe.db.set_value("OpenBanking Account", existing_by_uuid[uuid].name, values)
+			else:
+				# Nuovo account: inserisci nella child table
+				doc = frappe.new_doc("OpenBanking Account")
+				doc.update(values)
+				doc.uuid = uuid
+				doc.parent = client.settings.name
+				doc.parenttype = "OpenBanking Settings"
+				doc.parentfield = "accounts"
+				doc.idx = len(existing_by_uuid) + 1
+				doc.insert(ignore_permissions=True)
+
+		# Rimuovi account non più presenti nell'API
+		for uuid, acc in existing_by_uuid.items():
+			if uuid not in api_uuids:
+				frappe.delete_doc("OpenBanking Account", acc.name, ignore_permissions=True)
+
 		frappe.db.commit()
 
 		return {
