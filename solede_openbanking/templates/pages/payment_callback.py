@@ -12,17 +12,18 @@ def get_context(context):
 	# Non richiediamo autenticazione per questa pagina perché viene chiamata da ACube
 	# e potrebbe non avere la sessione dell'utente
 
-	# Ottieni parametri dalla query string (supporta sia payment_uuid che payment_id)
-	payment_uuid = frappe.form_dict.get("payment_uuid") or frappe.form_dict.get("payment_id")
+	# ACube reindirizza al returnUrl senza appendere l'UUID: il pagamento si ritrova
+	# tramite il `token` che abbiamo generato e incluso noi nel returnUrl.
+	token = frappe.form_dict.get("token")
 
-	if not payment_uuid:
+	if not token:
 		context.error = True
 		context.title = _("Errore")
-		context.message = _("Payment UUID non fornito")
+		context.message = _("Identificativo pagamento non fornito")
 		return context
 
-	# Recupera OpenBanking Payment
-	payment_name = frappe.db.get_value("OpenBanking Payment", {"uuid": payment_uuid}, "name")
+	# Recupera OpenBanking Payment dal token
+	payment_name = frappe.db.get_value("OpenBanking Payment", {"callback_token": token}, "name")
 
 	if not payment_name:
 		context.error = True

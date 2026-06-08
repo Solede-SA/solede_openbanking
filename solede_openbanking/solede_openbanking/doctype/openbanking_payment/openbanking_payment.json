@@ -8,6 +8,7 @@
  "field_order": [
   "payment_details_section",
   "uuid",
+  "callback_token",
   "payment_direction",
   "status",
   "system",
@@ -45,6 +46,14 @@
    "label": "Payment UUID",
    "read_only": 1,
    "unique": 1
+  },
+  {
+   "fieldname": "callback_token",
+   "fieldtype": "Data",
+   "label": "Callback Token",
+   "read_only": 1,
+   "unique": 1,
+   "hidden": 1
   },
   {
    "fieldname": "payment_direction",

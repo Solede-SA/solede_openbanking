@@ -359,10 +359,14 @@ def initiate_sepa_payment(
 	# Crea client API
 	client = ACubeAPIClient(company)
 
-	# Prepara return URL e error URL da settings (DRY: riutilizzo settings già caricato)
+	# Prepara return URL e error URL da settings (DRY: riutilizzo settings già caricato).
+	# ACube non appende l'UUID al returnUrl e l'UUID è noto solo DOPO questa chiamata,
+	# quindi generiamo un token nostro prima della chiamata, lo passiamo nel returnUrl
+	# e lo salviamo sul record: la pagina di callback ritrova il pagamento da lì.
 	callback_base_url = settings.callback_base_url.rstrip("/")
-	return_url = f"{callback_base_url}/payment_callback"
-	error_url = f"{callback_base_url}/payment_callback"
+	callback_token = frappe.generate_hash(length=32)
+	return_url = f"{callback_base_url}/payment_callback?token={callback_token}"
+	error_url = return_url
 
 	# Prepara payload
 	payload = {
@@ -397,6 +401,7 @@ def initiate_sepa_payment(
 		{
 			"doctype": "OpenBanking Payment",
 			"uuid": response.get("uuid"),
+			"callback_token": callback_token,
 			"payment_direction": "outbound",
 			"status": "pending",
 			"system": system,
