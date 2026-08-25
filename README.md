@@ -37,7 +37,7 @@ Frappe app per l'integrazione con ACube Open Banking API. Questa app permette di
 - **SEPA Instant** - Supporto bonifici istantanei (completati in pochi secondi)
 - **Validazione SEPA** - Controllo automatico paese IBAN per bonifici SEPA
 - **IBAN Enrichment** - Creazione automatica Bank/Bank Account da IBAN
-- **Payment Entry Automatico** - Creazione automatica Payment Entry da webhook con status `confirmed`
+- **Payment Entry Automatico** - Creazione automatica Payment Entry da webhook con status `submitted`
 - **Associazione Banca Corretta** - Il Payment Entry usa il conto bancario effettivo del pagamento (lookup IBAN)
 - **Callback Page** - Pagina di ritorno dopo autorizzazione pagamento
 - **Mode of Payment Configurabile** - Modalità pagamento configurabile per ogni company
@@ -228,7 +228,7 @@ Le transazioni verranno importate in:
 - **pending**: Pagamento inizializzato, in attesa autorizzazione
 - **requested**: Autorizzazione completata, in elaborazione
 - **processing**: Pagamento in corso
-- **confirmed**: Pagamento confermato dalla banca (Payment Entry creato automaticamente)
+- **submitted**: Pagamento autorizzato e inviato alla banca — stato finale di successo, A-Cube non lo aggiorna oltre (Payment Entry creata automaticamente)
 - **failed**: Pagamento fallito
 - **cancelled**: Pagamento annullato (solo lato sistema, non presso la banca)
 
@@ -405,7 +405,7 @@ Tracciamento pagamenti SEPA.
 **Campi principali:**
 - `uuid` (Data): UUID pagamento da ACube
 - `payment_direction` (Select): outbound/inbound
-- `status` (Data): pending/requested/processing/confirmed/failed/cancelled
+- `status` (Data): pending/requested/processing/submitted/failed/cancelled
 - `system` (Select): sepa/sepa-instant
 - `amount` (Currency): Importo pagamento
 - `currency_code` (Data): Valuta (default EUR)
@@ -531,7 +531,7 @@ acube_webhook()
 
 handle_payment_webhook(payload, company, log_name)
 # Gestisce webhook pagamento
-# Crea automaticamente Payment Entry se status = "confirmed"
+# Crea automaticamente Payment Entry se status = "submitted"
 
 create_payment_entry_from_payment(payment_doc)
 # Crea Payment Entry da OpenBanking Payment
@@ -595,7 +595,7 @@ class ACubeAPIClient:
 
 ### Payment Entry non viene creato automaticamente
 - Verifica che `payment_mode_of_payment` sia configurato in OpenBanking Settings
-- Controlla ACube Webhook Log per verificare ricezione webhook (lo status atteso da ACube e' `confirmed`)
+- Controlla ACube Webhook Log per verificare ricezione webhook (lo status atteso da ACube e' `submitted`)
 - Controlla Error Log (cerca "Payment Webhook Error") per eccezioni durante creazione Payment Entry
 - Verifica che Purchase Invoice abbia ancora outstanding_amount > 0
 - Verifica che il Bank Account ERPNext abbia l'IBAN corrispondente all'account OpenBanking usato per il pagamento

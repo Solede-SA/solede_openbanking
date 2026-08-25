@@ -529,8 +529,9 @@ def cancel_payment(payment_name):
 
 	payment_doc = frappe.get_doc("OpenBanking Payment", payment_name)
 
-	# Valida che il pagamento sia in uno stato annullabile
-	if payment_doc.status in ["confirmed", "processing"]:
+	# Valida che il pagamento sia in uno stato annullabile: "submitted" e' un
+	# bonifico gia' eseguito dalla banca, non si annulla lato sistema
+	if payment_doc.status not in ["pending", "requested", "failed"]:
 		frappe.throw(
 			_("Cannot cancel payment in status {0}. Only pending, requested, or failed payments can be cancelled.").format(
 				payment_doc.status
@@ -550,3 +551,27 @@ def cancel_payment(payment_name):
 		"new_status": "cancelled",
 		"message": _("Payment cancelled successfully. You can now create a new payment."),
 	}
+
+
+@frappe.whitelist()
+def create_missing_payment_entry(payment_name):
+	"""Crea la Payment Entry per un OpenBanking Payment submitted il cui webhook
+	e' andato perso (es. firma invalida prima del fix domini del 25/08/2026).
+
+	Riusa create_payment_entry_from_payment: se la Purchase Invoice e' gia'
+	saldata non crea nulla.
+	"""
+	payment_doc = frappe.get_doc("OpenBanking Payment", payment_name)
+	if payment_doc.status != "submitted":
+		frappe.throw(
+			_("Consentito solo per pagamenti submitted (stato attuale: {0}).").format(payment_doc.status)
+		)
+
+	from solede_openbanking.api.webhooks import create_payment_entry_from_payment
+
+	create_payment_entry_from_payment(payment_doc)
+
+	payment_entry = frappe.db.get_value(
+		"Payment Entry", {"custom_openbanking_payment": payment_name, "docstatus": 1}, "name"
+	)
+	return {"payment_name": payment_name, "payment_entry": payment_entry}

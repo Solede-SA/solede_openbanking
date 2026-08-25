@@ -387,7 +387,7 @@ def handle_payment_webhook(payload, company, log_name):
 	"""
 	Gestisce evento payment:
 	- Aggiorna OpenBanking Payment con nuovo status
-	- Se completed: crea Payment Entry collegato a Purchase Invoice
+	- Se submitted: crea Payment Entry collegato a Purchase Invoice
 	- Se failed: notifica errore
 	"""
 	payment_data = payload["payment"]
@@ -432,8 +432,12 @@ def handle_payment_webhook(payload, company, log_name):
 		payment_doc.save(ignore_permissions=True)
 		frappe.db.commit()
 
-		# Se confirmed (pagamento andato a buon fine), crea Payment Entry
-		if payment_status.lower() == "confirmed" and payment_doc.reference_doctype == "Purchase Invoice":
+		# "submitted" e' lo stato finale di successo dei bonifici outbound: A-Cube
+		# invia UN solo webhook payment (a flusso autorizzato dalla banca) e non
+		# aggiorna mai piu' lo stato (verificato 25/08/2026 su pagamenti storici
+		# fermi a submitted mesi dopo l'esecuzione). I fallimenti arrivano prima,
+		# con errorClass/failed.
+		if payment_status.lower() == "submitted" and payment_doc.reference_doctype == "Purchase Invoice":
 			create_payment_entry_from_payment(payment_doc)
 
 		frappe.logger().info(

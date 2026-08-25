@@ -38,9 +38,9 @@ def get_context(context):
 		context.title = _("Pagamento in elaborazione")
 
 		# Determina messaggio e stato in base allo status
-		if payment_doc.status == "completed":
+		if payment_doc.status == "submitted":
 			context.success = True
-			context.message = _("Il pagamento è stato completato con successo!")
+			context.message = _("Il pagamento è stato autorizzato e preso in carico dalla banca!")
 			context.icon = "check-circle"
 			context.color = "green"
 		elif payment_doc.status == "failed":
