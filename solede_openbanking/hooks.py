@@ -296,8 +296,4 @@ fixtures = [
 		"dt": "Desktop Icon",
 		"filters": [["app", "=", "solede_openbanking"]],
 	},
-	{
-		"dt": "Workspace Sidebar",
-		"filters": [["module", "=", "Solede Openbanking"]],
-	},
 ]
