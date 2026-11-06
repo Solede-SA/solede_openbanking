@@ -9,6 +9,8 @@ from datetime import datetime
 
 import frappe
 from frappe import _
+from frappe.utils import flt
+from frappe.utils.caching import request_cache
 
 from solede_openbanking.api.client import ACubeAPIClient
 
@@ -212,6 +214,24 @@ def start_connect_request(company, return_url=None, bank_manager_email=None, day
 	return {"success": True, "connect_url": connect_url, "message": _("Connect request created successfully")}
 
 
+def _conti_collegati(client):
+	return client.get(f"business-registry/{client.fiscal_id}/accounts", "Get Accounts")
+
+
+@request_cache
+def _conti_della_societa(company):
+	return _conti_collegati(ACubeAPIClient(company))
+
+
+def saldo_conto(company, iban, valuta):
+	"""Il saldo vero di un conto, in sola lettura: `get_accounts` invece riscrive le impostazioni. Con più conti della
+	stessa banca una chiamata sola, e sullo stesso IBAN ogni valuta ha il suo saldo."""
+	for conto in _conti_della_societa(company):
+		if conto.get("iban") == iban and conto.get("currencyCode") == valuta:
+			return flt(conto.get("balance"))
+	frappe.throw(_("Il conto {0} in {1} non è fra quelli collegati.").format(iban, valuta))
+
+
 @frappe.whitelist()
 def get_accounts(company):
 	"""
@@ -224,7 +244,7 @@ def get_accounts(company):
 	client = ACubeAPIClient(company)
 
 	try:
-		accounts_data = client.get(f"business-registry/{client.fiscal_id}/accounts", "Get Accounts")
+		accounts_data = _conti_collegati(client)
 
 		# Mappa account esistenti per uuid
 		existing_by_uuid = {acc.uuid: acc for acc in client.settings.accounts}
