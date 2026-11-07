@@ -36,39 +36,25 @@ def sync_all_openbanking_data():
 
 	for settings in settings_list:
 		company = settings.company
-		frappe.logger().info(f"Syncing OpenBanking data for company: {company}")
-
 		try:
-			# 1. Aggiorna i dati degli account
-			frappe.logger().info(f"Updating accounts for {company}")
-			accounts_result = get_accounts(company)
-
-			if accounts_result.get("success"):
-				frappe.logger().info(f"Updated {accounts_result.get('count', 0)} accounts for {company}")
-
-			# 2. Importa le transazioni degli ultimi 7 giorni
-			to_date = datetime.now().strftime("%Y-%m-%d")
-			from_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-
-			frappe.logger().info(f"Importing transactions for {company} from {from_date} to {to_date}")
-			import_result = import_transactions(company=company, from_date=from_date, to_date=to_date)
-
-			if import_result.get("success"):
-				frappe.logger().info(
-					f"Imported {import_result.get('imported', 0)} transactions for {company} "
-					f"(skipped: {import_result.get('skipped', 0)}, failed: {import_result.get('failed', 0)})"
-				)
-
-			# 3. Registra le spese bancarie riconosciute da una regola
-			spese_bancarie.registra(company)
-
+			sincronizza(company)
 			success_count += 1
-
 		except Exception as e:
 			error_count += 1
 			error_msg = str(e)
 			frappe.logger().error(f"Error syncing OpenBanking data for {company}: {error_msg}")
 			frappe.log_error(f"Company: {company}\nError: {error_msg}", "OpenBanking Sync Error")
-			continue
 
 	frappe.logger().info(f"OpenBanking sync completed: {success_count} success, {error_count} errors")
+
+
+def sincronizza(company):
+	"""Il giro di una società: dati dei conti, movimenti degli ultimi 7 giorni (arrivano anche in ritardo) e spese
+	bancarie riconosciute da una regola. Lo fanno il giro orario e il pulsante «Aggiorna i movimenti» del Riepilogo
+	contabile. Un movimento non importato è un errore: il dettaglio è nell'Error Log."""
+	get_accounts(company)
+	adesso = datetime.now()
+	esito = import_transactions(company=company, from_date=(adesso - timedelta(days=7)).strftime("%Y-%m-%d"), to_date=adesso.strftime("%Y-%m-%d"))
+	spese_bancarie.registra(company)
+	if esito["failed"]:
+		frappe.throw(_("{0} movimenti di {1} non importati da ACube: il dettaglio è nell'Error Log.").format(esito["failed"], company))
