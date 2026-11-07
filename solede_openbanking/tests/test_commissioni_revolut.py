@@ -90,6 +90,18 @@ class TestCommissioniRevolut(IntegrationTestCase):
 				# il giro dopo li riceve di nuovo: nessun doppione
 				self.assertEqual(len(self._importa(*(self._movimento(m) for m in ordine))), 2)
 
+	def test_la_patch_lascia_stare_i_movimenti_annullati(self):
+		from solede_openbanking.patches import commissioni_revolut
+
+		vivo = frappe.get_doc("Bank Transaction", self._importa(self._movimento(PAGAMENTO))[self.id].name)
+		vecchio = frappe.copy_doc(vivo)  # copia annullata di una prima importazione, con l'identificativo vecchio
+		vecchio.acube_transaction_id = vecchio.transaction_id = vecchio.reference_number = PAGAMENTO["transactionId"]
+		vecchio.insert().submit()
+		vecchio.cancel()
+		commissioni_revolut.execute()  # prima falliva: l'identificativo nuovo è già del movimento vivo
+		self.assertEqual(frappe.db.get_value("Bank Transaction", vecchio.name, "acube_transaction_id"), PAGAMENTO["transactionId"])
+		self.assertEqual(frappe.db.get_value("Bank Transaction", vivo.name, "acube_transaction_id"), self.id)
+
 	def _regola(self):
 		frappe.get_doc({
 			"doctype": "Bank Transaction Rule",

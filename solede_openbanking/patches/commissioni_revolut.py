@@ -1,6 +1,7 @@
 """I movimenti già importati prendono le regole nuove dell'importatore: la commissione di cambio Revolut con il suo
 identificativo (prima aveva quello del pagamento, che così sarebbe tornato come doppione) e il giorno di addebito al
-posto della valuta."""
+posto della valuta. I movimenti annullati restano come sono: su cbmedical sono copie di una prima importazione con gli
+identificativi vecchi, e il nuovo è già del movimento vivo."""
 
 import json
 
@@ -12,7 +13,7 @@ from solede_openbanking.api.business_registry import extract_unique_transaction_
 def execute():
 	for bt in frappe.get_all(
 		"Bank Transaction",
-		filters={"api_source": "ACube"},
+		filters={"api_source": "ACube", "docstatus": ["<", 2]},
 		fields=["name", "acube_raw_data", "acube_transaction_log"],
 	):
 		movimento = json.loads(bt.acube_raw_data)
