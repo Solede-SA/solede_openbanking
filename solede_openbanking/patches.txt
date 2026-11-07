@@ -6,3 +6,4 @@
 # Patches added in this section will be executed after doctypes are migrated
 solede_openbanking.patches.commissioni_revolut
 solede_openbanking.patches.pulizia_ricezioni_acube
+solede_openbanking.patches.revolut_da_riconciliazione

@@ -1,0 +1,138 @@
+{
+ "actions": [],
+ "creation": "2026-04-16 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "date",
+  "transaction_id",
+  "transaction_type",
+  "currency",
+  "column_break_1",
+  "deposit",
+  "withdrawal",
+  "included_fee",
+  "solede_orig_currency",
+  "solede_orig_amount",
+  "solede_beneficiary_iban",
+  "column_break_2",
+  "payer",
+  "description",
+  "matching_section",
+  "status",
+  "bank_transaction"
+ ],
+ "fields": [
+  {
+   "fieldname": "date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Data",
+   "reqd": 1
+  },
+  {
+   "fieldname": "transaction_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Transaction ID",
+   "reqd": 1,
+   "description": "ID univoco dalla banca, usato per idempotenza"
+  },
+  {
+   "fieldname": "transaction_type",
+   "fieldtype": "Data",
+   "label": "Tipo"
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Valuta",
+   "options": "Currency"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "deposit",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Accredito"
+  },
+  {
+   "fieldname": "withdrawal",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Addebito"
+  },
+  {
+   "fieldname": "included_fee",
+   "fieldtype": "Currency",
+   "label": "Commissione Inclusa"
+  },
+  {
+   "fieldname": "solede_orig_currency",
+   "fieldtype": "Link",
+   "label": "Valuta originale",
+   "options": "Currency"
+  },
+  {
+   "fieldname": "solede_orig_amount",
+   "fieldtype": "Float",
+   "precision": "2",
+   "label": "Importo in valuta originale"
+  },
+  {
+   "fieldname": "solede_beneficiary_iban",
+   "fieldtype": "Data",
+   "length": 50,
+   "label": "IBAN beneficiario"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payer",
+   "fieldtype": "Data",
+   "label": "Controparte"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Descrizione"
+  },
+  {
+   "fieldname": "matching_section",
+   "fieldtype": "Section Break",
+   "label": "Import"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Stato",
+   "options": "Pending\nCreated\nAlready Imported\nSkipped",
+   "default": "Pending",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "bank_transaction",
+   "fieldtype": "Link",
+   "label": "Bank Transaction",
+   "options": "Bank Transaction",
+   "read_only": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-04-16 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Solede Openbanking",
+ "name": "CSV Bank Import Line",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

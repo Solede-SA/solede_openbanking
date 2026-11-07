@@ -1,0 +1,242 @@
+{
+ "actions": [],
+ "autoname": "field:bank",
+ "creation": "2026-05-07 12:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "main_tab",
+  "bank",
+  "is_active",
+  "column_break_main",
+  "environment",
+  "connection_status",
+  "permessi",
+  "credentials_section",
+  "client_id",
+  "private_key",
+  "column_break_creds",
+  "redirect_uri",
+  "refresh_token",
+  "sync_section",
+  "importa_movimenti",
+  "registra_commissioni",
+  "conto_commissioni",
+  "cutover_date",
+  "column_break_sync",
+  "last_sync_at",
+  "auth_error_section",
+  "last_auth_error",
+  "reauth_notified_at",
+  "accounts_tab",
+  "accounts_html"
+ ],
+ "fields": [
+  {
+   "fieldname": "main_tab",
+   "fieldtype": "Tab Break",
+   "label": "Configurazione"
+  },
+  {
+   "fieldname": "bank",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Bank",
+   "options": "Bank",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Attivo"
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Production",
+   "description": "Production usa b2b.revolut.com; Sandbox usa sandbox-b2b.revolut.com.",
+   "fieldname": "environment",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Environment",
+   "options": "Production\nSandbox",
+   "reqd": 1
+  },
+  {
+   "default": "Never Connected",
+   "fieldname": "connection_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Connection Status",
+   "options": "Never Connected\nConnected\nNeeds Reauth",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "default": "READ",
+   "description": "READ: solo letture. READ,WRITE: anche controparti e bozze di pagamento, che partono solo dopo l'approvazione nell'app Revolut. Cambiando i permessi va rifatto il collegamento.",
+   "fieldname": "permessi",
+   "fieldtype": "Select",
+   "label": "Permessi",
+   "options": "READ\nREAD,WRITE",
+   "reqd": 1
+  },
+  {
+   "fieldname": "credentials_section",
+   "fieldtype": "Section Break",
+   "label": "Credenziali OAuth"
+  },
+  {
+   "description": "Client ID rilasciato dal Revolut Developer Portal",
+   "fieldname": "client_id",
+   "fieldtype": "Data",
+   "label": "Client ID",
+   "reqd": 1
+  },
+  {
+   "description": "Chiave privata RSA in formato PEM. La pubblica corrispondente è caricata come certificato X.509 sul Developer Portal.",
+   "fieldname": "private_key",
+   "fieldtype": "Password",
+   "label": "Private Key (PEM)",
+   "length": 4096,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_creds",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "URL pubblico del callback. Deve coincidere con quello dichiarato sul Developer Portal. Es.: https://erp.solede.it/api/method/solede_openbanking.api.revolut.callback",
+   "fieldname": "redirect_uri",
+   "fieldtype": "Data",
+   "label": "Redirect URI",
+   "reqd": 1
+  },
+  {
+   "description": "Popolato dal callback OAuth dopo il consent. Cifrato.",
+   "fieldname": "refresh_token",
+   "fieldtype": "Password",
+   "label": "Refresh Token",
+   "length": 4096,
+   "read_only": 1
+  },
+  {
+   "fieldname": "sync_section",
+   "fieldtype": "Section Break",
+   "label": "Sync"
+  },
+  {
+   "default": "1",
+   "description": "Spento: il collegamento serve solo ai pagamenti e i movimenti arrivano da un'altra fonte (per esempio ACube).",
+   "fieldname": "importa_movimenti",
+   "fieldtype": "Check",
+   "label": "Importa i movimenti"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.importa_movimenti",
+   "description": "Acceso: la commissione di cambio compresa in un movimento nuovo diventa subito una spesa bancaria sul conto delle commissioni e il movimento resta da abbinare al netto.",
+   "fieldname": "registra_commissioni",
+   "fieldtype": "Check",
+   "label": "Registra le commissioni comprese"
+  },
+  {
+   "depends_on": "eval:doc.registra_commissioni",
+   "description": "Il conto delle spese bancarie su cui vanno le commissioni comprese nei movimenti.",
+   "fieldname": "conto_commissioni",
+   "fieldtype": "Link",
+   "label": "Conto delle commissioni",
+   "mandatory_depends_on": "eval:doc.registra_commissioni",
+   "options": "Account"
+  },
+  {
+   "description": "Data dalla quale iniziare a sincronizzare. Le transazioni Revolut con created_at precedente vengono ignorate.",
+   "fieldname": "cutover_date",
+   "fieldtype": "Date",
+   "label": "Cutover Date",
+   "mandatory_depends_on": "eval:doc.importa_movimenti"
+  },
+  {
+   "fieldname": "column_break_sync",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Timestamp dell'ultimo sync. Modificabile manualmente: imposta NULL (svuota il campo) per far ripartire il sync dal cutover_date e re-importare lo storico.",
+   "fieldname": "last_sync_at",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Last Sync At"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "auth_error_section",
+   "fieldtype": "Section Break",
+   "label": "Errori Autenticazione"
+  },
+  {
+   "fieldname": "last_auth_error",
+   "fieldtype": "Small Text",
+   "label": "Last Auth Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reauth_notified_at",
+   "fieldtype": "Datetime",
+   "label": "Reauth Notified At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "accounts_tab",
+   "fieldtype": "Tab Break",
+   "label": "Account Revolut"
+  },
+  {
+   "fieldname": "accounts_html",
+   "fieldtype": "HTML",
+   "label": "Account Revolut"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-07 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Solede Openbanking",
+ "name": "Revolut Connection",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

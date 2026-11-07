@@ -9,6 +9,7 @@ from datetime import datetime
 import frappe
 import requests
 from frappe import _
+from frappe.utils.user import get_users_with_role
 
 # Cache per la chiave pubblica (evita chiamate ripetute)
 _public_key_cache = None
@@ -310,12 +311,7 @@ def handle_reconnect_webhook(payload, company, log_name):
 	}
 	urgency_info = urgency_map.get(notice_level, {"days": 20, "urgency": "info"})
 
-	# Ottieni utenti con ruolo Accounts Manager
-	account_managers = frappe.get_all(
-		"Has Role", filters={"role": "Accounts Manager", "parenttype": "User"}, fields=["parent"]
-	)
-
-	recipients = [manager.parent for manager in account_managers]
+	recipients = get_users_with_role("Accounts Manager")
 
 	if not recipients:
 		return f"No Accounts Manager found to notify. Notice level: {notice_level}"

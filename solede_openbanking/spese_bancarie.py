@@ -5,8 +5,14 @@ collegamento diretto a Revolut). La registrazione va nel giorno di addebito e re
 altro tipo restano suggerimenti nello strumento di riconciliazione di ERPNext."""
 
 import frappe
-from erpnext.accounts.doctype.bank_reconciliation_tool.bank_reconciliation_tool import create_bank_entry_and_reconcile
+from erpnext.accounts.doctype.bank_reconciliation_tool.bank_reconciliation_tool import (
+	create_bank_entry_and_reconcile,
+)
 from erpnext.accounts.doctype.bank_transaction_rule.bank_transaction_rule import _run_rule_evaluation
+from erpnext.setup.utils import get_exchange_rate
+from frappe.utils import flt
+
+TOLLERANZA = 0.01
 
 
 def registra(company):
@@ -54,3 +60,41 @@ def _registra(bt, conto):
 			{"account": conto, "debit": uscita, "credit": entrata},
 		],
 	)
+
+
+def registra_commissione_compresa(bt, conto):
+	"""La commissione compresa in un movimento (`included_fee`, Revolut) diventa una spesa bancaria sul `conto`,
+	collegata al movimento, che resta da abbinare per il netto. Una volta sola: se c'è già, non si rifà. Scrittura
+	fatta qui e non con create_bank_entry_and_reconcile, che registra sempre tutto il residuo del movimento."""
+	commissione = flt(bt.included_fee)
+	if commissione <= 0 or any(
+		p.payment_document == "Journal Entry" and abs(flt(p.allocated_amount) - commissione) <= TOLLERANZA for p in bt.payment_entries
+	):
+		return None
+	banca, company = frappe.db.get_value("Bank Account", bt.bank_account, ["account", "company"])
+	valuta = frappe.get_cached_value("Company", company, "default_currency")
+	valuta_banca, valuta_spese = (frappe.get_cached_value("Account", conto_gl, "account_currency") for conto_gl in (banca, conto))
+	cambio_banca = get_exchange_rate(valuta_banca, valuta, bt.date)
+	if valuta_spese == valuta_banca:
+		cambio_spese, importo_spese = cambio_banca, commissione
+	else:
+		cambio_spese = get_exchange_rate(valuta_spese, valuta, bt.date)
+		importo_spese = flt(commissione * cambio_banca / cambio_spese, 2)
+	scrittura = frappe.get_doc({
+		"doctype": "Journal Entry",
+		"voucher_type": "Bank Entry",
+		"company": company,
+		"posting_date": bt.date,
+		"cheque_no": bt.transaction_id,
+		"cheque_date": bt.date,
+		"multi_currency": 1,
+		"user_remark": f"Commissione Revolut: {bt.description}",
+		"accounts": [
+			{"account": conto, "debit_in_account_currency": importo_spese, "exchange_rate": cambio_spese},
+			{"account": banca, "credit_in_account_currency": commissione, "exchange_rate": cambio_banca},
+		],
+	}).insert()
+	scrittura.submit()
+	bt.add_payment_entries([{"payment_doctype": "Journal Entry", "payment_name": scrittura.name}])
+	bt.save()
+	return scrittura

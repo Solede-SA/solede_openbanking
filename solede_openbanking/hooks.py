@@ -49,6 +49,7 @@ doctype_js = {
 	"Bank Transaction": "public/js/bank_transaction.js",
 	"Supplier": "public/js/supplier.js",
 	"Purchase Invoice": "public/js/purchase_invoice.js",
+	"Revolut Connection": "public/js/revolut_connection.js",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -154,7 +155,14 @@ doctype_js = {
 # Scheduled Tasks
 # ---------------
 
-scheduler_events = {"hourly": ["solede_openbanking.api.scheduled_tasks.sync_all_openbanking_data"]}
+scheduler_events = {
+	"hourly": [
+		"solede_openbanking.api.scheduled_tasks.sync_all_openbanking_data",
+		"solede_openbanking.revolut_sync.sync_revolut_transactions",
+	]
+}
+
+doc_events = {"Payment Entry": {"before_save": "solede_openbanking.payment_entry.azzera_data_di_liquidazione_su_rettifica"}}
 
 # Testing
 # -------
@@ -252,6 +260,12 @@ fixtures = [
 					"Bank Transaction-acube_status",
 					"Bank Transaction-acube_category",
 					"Bank Transaction-acube_raw_data",
+					"Bank Transaction-solede_orig_currency",
+					"Bank Transaction-solede_orig_amount",
+					"Bank Transaction-solede_beneficiary_iban",
+					"Bank Transaction-revolut_completed_at",
+					"Bank Transaction-revolut_balance_after",
+					"Bank Account-revolut_account_id",
 				],
 			]
 		],
