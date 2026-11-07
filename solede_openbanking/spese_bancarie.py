@@ -1,6 +1,7 @@
 """Le spese bancarie (commissioni, canoni, bolli) si registrano da sole. Le riconosce una regola dei movimenti bancari di
 ERPNext (Bank Transaction Rule) di tipo «Bank Entry» a conto unico, che dice anche il conto: la regola è la decisione di
-Lorenzo, qui si esegue soltanto. La registrazione va nel giorno di addebito e resta collegata al movimento. Le regole di
+Lorenzo, qui si esegue soltanto. Vale per tutti i movimenti della società, da qualunque fonte arrivino (ACube, il
+collegamento diretto a Revolut). La registrazione va nel giorno di addebito e resta collegata al movimento. Le regole di
 altro tipo restano suggerimenti nello strumento di riconciliazione di ERPNext."""
 
 import frappe
@@ -22,8 +23,8 @@ def registra(company):
 	_run_rule_evaluation()
 	for bt in frappe.get_all(
 		"Bank Transaction",
-		filters={"company": company, "api_source": "ACube", "docstatus": 1, "status": "Unreconciled", "matched_transaction_rule": ["in", list(regole)]},
-		fields=["name", "bank_account", "withdrawal", "unallocated_amount", "acube_booking_date", "reference_number", "description", "matched_transaction_rule"],
+		filters={"company": company, "docstatus": 1, "status": "Unreconciled", "matched_transaction_rule": ["in", list(regole)]},
+		fields=["name", "bank_account", "withdrawal", "unallocated_amount", "date", "api_source", "acube_booking_date", "reference_number", "description", "matched_transaction_rule"],
 	):
 		frappe.db.savepoint("spesa_bancaria")
 		try:
@@ -39,11 +40,14 @@ def _registra(bt, conto):
 	banca = frappe.get_cached_value("Bank Account", bt.bank_account, "account")
 	importo = bt.unallocated_amount
 	uscita, entrata = (importo, 0) if bt.withdrawal else (0, importo)
+	# ACube dà la valuta nella data e il giorno di addebito a parte; per le altre fonti (Revolut diretto: il giorno in cui
+	# il movimento è completato) la data è già il giorno di addebito.
+	giorno = bt.acube_booking_date if bt.api_source == "ACube" else bt.date
 	create_bank_entry_and_reconcile(
 		bank_transaction_name=bt.name,
-		cheque_date=bt.acube_booking_date,
-		posting_date=bt.acube_booking_date,
-		cheque_no=bt.reference_number,
+		cheque_date=giorno,
+		posting_date=giorno,
+		cheque_no=(bt.reference_number or bt.description)[:140],  # il numero del movimento; senza (inserito a mano), la descrizione
 		user_remark=bt.description,
 		entries=[
 			{"account": banca, "bank_account": bt.bank_account, "debit": entrata, "credit": uscita},

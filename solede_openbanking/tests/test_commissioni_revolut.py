@@ -137,3 +137,19 @@ class TestCommissioniRevolut(IntegrationTestCase):
 		# la seconda lettura è uguale alla prima (cambia solo fetchedAt): una copia sola, quella contabilizzata
 		copie = frappe.get_all("ACube Transaction Reception", filters={"parent": registro}, pluck="raw_data")
 		self.assertEqual([json.loads(c)["status"] for c in copie], ["posted"])
+
+	def test_regola_anche_sui_movimenti_non_acube(self):
+		frappe.get_doc({
+			"doctype": "Bank Transaction Rule", "rule_name": f"Canone di prova {self.id}", "company": COMPANY, "transaction_type": "Withdrawal",
+			"description_rules": [{"check": "Contains", "value": f"plan fee {self.id}"}], "classify_as": "Bank Entry",
+			"bank_entry_type": "Single Account", "account": CONTO_SPESE, "priority": -1,
+		}).insert()
+		bt = frappe.get_doc({
+			"doctype": "Bank Transaction", "date": "2026-11-05", "bank_account": frappe.db.get_value("Bank Account", {"iban": "LT073250067903557127", "company": COMPANY}),
+			"company": COMPANY, "currency": "EUR", "withdrawal": 10, "description": f"Company plan fee {self.id}", "transaction_id": self.id, "status": "Pending",
+		}).insert()
+		bt.submit()
+		spese_bancarie.registra(COMPANY)
+		bt.reload()
+		self.assertEqual(bt.status, "Reconciled")
+		self.assertEqual(str(frappe.db.get_value("Journal Entry", bt.payment_entries[0].payment_entry, "posting_date")), "2026-11-05")  # la data del movimento
