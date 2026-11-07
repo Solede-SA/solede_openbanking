@@ -3,6 +3,7 @@ registrate da sole con le regole di ERPNext. Dati presi da un movimento vero (Go
 nuovo, sul conto Revolut di Solede SRL della copia del sito di produzione (daeok-copia.localhost). Commit patchato."""
 
 import copy
+import json
 import uuid
 from unittest.mock import patch
 
@@ -127,3 +128,12 @@ class TestCommissioniRevolut(IntegrationTestCase):
 			spese_bancarie.registra(COMPANY)
 		self.assertEqual(frappe.db.get_value("Bank Transaction", commissione, ["status", "matched_transaction_rule"]), ("Unreconciled", None))
 		self.assertIn(f"Spesa bancaria non registrata: {commissione}", [c.kwargs["title"] for c in errore.call_args_list])
+
+	def test_il_registro_copia_solo_i_cambiamenti(self):
+		movimento = self._movimento(PAGAMENTO)
+		for lettura, stato in (("2026-10-22T20:17:38Z", "pending"), ("2026-10-22T21:17:38Z", "pending"), ("2026-10-23T14:26:30Z", "posted")):
+			self._importa({**movimento, "fetchedAt": lettura, "status": stato})
+		registro = frappe.db.get_value("ACube Transaction Log", {"acube_transaction_id": self.id})
+		# la seconda lettura è uguale alla prima (cambia solo fetchedAt): una copia sola, quella contabilizzata
+		copie = frappe.get_all("ACube Transaction Reception", filters={"parent": registro}, pluck="raw_data")
+		self.assertEqual([json.loads(c)["status"] for c in copie], ["posted"])

@@ -476,6 +476,20 @@ def extract_unique_transaction_id(transaction_data):
 	return unique_id
 
 
+def versione(transaction_data):
+	"""Il movimento senza `fetchedAt`, l'ora in cui ACube ha letto la banca, che cambia a ogni lettura anche quando il
+	movimento è lo stesso: due ricezioni con la stessa versione sono la stessa cosa."""
+	return json.dumps({chiave: valore for chiave, valore in transaction_data.items() if chiave != "fetchedAt"}, sort_keys=True)
+
+
+def versioni_salvate(log_name):
+	"""Le versioni già nel registro: quella della prima ricezione e quelle delle copie."""
+	dati = [frappe.db.get_value("ACube Transaction Log", log_name, "raw_data")] + frappe.get_all(
+		"ACube Transaction Reception", filters={"parent": log_name, "parenttype": "ACube Transaction Log"}, pluck="raw_data"
+	)
+	return {versione(json.loads(d)) for d in dati}
+
+
 def giorno_di_addebito(transaction_data):
 	"""Il giorno in cui il conto cambia (`extra.postingDate`); `madeOn` è la valuta, che per la BCC può essere prima."""
 	giorno = (transaction_data.get("extra") or {}).get("postingDate")
@@ -602,7 +616,7 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 
 			# Importa ogni transazione
 			for txn in transactions:
-				log_entry = None
+				log_name = None
 				try:
 					unique_id = extract_unique_transaction_id(txn)
 					transaction_currency = txn.get("currencyCode")
@@ -633,39 +647,27 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 								continue
 
 					# 3. Controlla se esiste già un log per questo ID univoco
-					existing_log_name = frappe.db.exists(
-						"ACube Transaction Log", {"acube_transaction_id": unique_id}
-					)
+					log_name = frappe.db.exists("ACube Transaction Log", {"acube_transaction_id": unique_id})
 
-					if existing_log_name:
-						# Log già esistente, recuperalo e aggiornalo come Duplicate
-						log_entry = frappe.get_doc("ACube Transaction Log", existing_log_name)
-
-						# Aggiungi una nuova reception alla child table
-						log_entry.append(
-							"receptions",
-							{"reception_date": frappe.utils.now(), "raw_data": json.dumps(txn, indent=2)},
-						)
-						log_entry.save(ignore_permissions=True)
-
-						# Aggiorna status e sync_date
+					if log_name:
+						# Già nel registro: una copia nuova solo per una versione che non c'è ancora (stato, importo, codice ACube)
+						if versione(txn) not in versioni_salvate(log_name):
+							log = frappe.get_doc("ACube Transaction Log", log_name)
+							log.append(
+								"receptions",
+								{"reception_date": frappe.utils.now(), "raw_data": json.dumps(txn, indent=2)},
+							)
+							log.save(ignore_permissions=True)
 						frappe.db.set_value(
-							"ACube Transaction Log", log_entry.name, "import_status", "Duplicate"
-						)
-						frappe.db.set_value(
-							"ACube Transaction Log", log_entry.name, "sync_date", frappe.utils.now()
-						)
-						print(
-							f"DEBUG - Transaction {unique_id} already logged, updated as Duplicate and added reception"
+							"ACube Transaction Log", log_name, {"import_status": "Duplicate", "sync_date": frappe.utils.now()}
 						)
 					else:
-						# Log non esiste, crealo
-						log_entry = create_transaction_log(
+						log_name = create_transaction_log(
 							company=company,
 							account_uuid=acc_uuid,
 							transaction_data=txn,
 							bank_account=bank_account,
-						)
+						).name
 
 					# 4. Controlla se esiste già il Bank Transaction con questo ID univoco
 					existing_bank_txn = frappe.db.exists(
@@ -677,7 +679,7 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 							f"DEBUG - Transaction {unique_id} already exists in Bank Transaction, skipping import"
 						)
 						frappe.db.set_value(
-							"ACube Transaction Log", log_entry.name, "bank_transaction", existing_bank_txn
+							"ACube Transaction Log", log_name, "bank_transaction", existing_bank_txn
 						)
 						skipped_count += 1
 						skip_reasons["already_imported"] += 1
@@ -689,13 +691,13 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 						bank_account=bank_account,
 						account_info=account_info,
 						transaction_data=txn,
-						transaction_log=log_entry.name,
+						transaction_log=log_name,
 					)
 
 					# 6. Aggiorna log con successo
-					frappe.db.set_value("ACube Transaction Log", log_entry.name, "import_status", "Imported")
+					frappe.db.set_value("ACube Transaction Log", log_name, "import_status", "Imported")
 					frappe.db.set_value(
-						"ACube Transaction Log", log_entry.name, "bank_transaction", bank_txn.name
+						"ACube Transaction Log", log_name, "bank_transaction", bank_txn.name
 					)
 
 					imported_count += 1
@@ -707,12 +709,12 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 					frappe.log_error(f"Transaction: {txn}, Error: {error_msg}", "Import Transaction Error")
 
 					# Aggiorna log con errore
-					if log_entry:
+					if log_name:
 						frappe.db.set_value(
-							"ACube Transaction Log", log_entry.name, "import_status", "Failed"
+							"ACube Transaction Log", log_name, "import_status", "Failed"
 						)
 						frappe.db.set_value(
-							"ACube Transaction Log", log_entry.name, "error_message", error_msg[:500]
+							"ACube Transaction Log", log_name, "error_message", error_msg[:500]
 						)
 
 					failed_count += 1
