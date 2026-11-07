@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import frappe
 from frappe import _
 
+from solede_openbanking import spese_bancarie
 from solede_openbanking.api.business_registry import get_accounts, import_transactions
 
 
@@ -15,6 +16,7 @@ def sync_all_openbanking_data():
 	Esegue:
 	1. Aggiornamento dati account (get_accounts)
 	2. Import transazioni degli ultimi 7 giorni (import_transactions)
+	3. Registrazione delle spese bancarie riconosciute da una regola (spese_bancarie.registra)
 
 	Esegue solo per le company che hanno business_registry_created = 1
 	"""
@@ -56,6 +58,9 @@ def sync_all_openbanking_data():
 					f"Imported {import_result.get('imported', 0)} transactions for {company} "
 					f"(skipped: {import_result.get('skipped', 0)}, failed: {import_result.get('failed', 0)})"
 				)
+
+			# 3. Registra le spese bancarie riconosciute da una regola
+			spese_bancarie.registra(company)
 
 			success_count += 1
 

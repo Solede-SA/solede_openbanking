@@ -458,27 +458,30 @@ def get_transactions(company, account_uuid=None, from_date=None, to_date=None, p
 		raise
 
 
+COMMISSIONE_REVOLUT = "Fee for "
+SUFFISSO_COMMISSIONE = ":fee"
+
+
 def extract_unique_transaction_id(transaction_data):
-	"""
-	Estrae l'ID univoco della transazione dal campo extra.id.
-	Se extra.id non esiste, usa transactionId come fallback.
-
-	Args:
-		transaction_data: Dati transazione da API
-
-	Returns:
-		ID univoco della transazione
-	"""
-	extra = transaction_data.get("extra", {})
+	"""L'identificativo della banca (`extra.id`), stabile mentre il movimento passa da in attesa a contabilizzato;
+	`transactionId` invece cambia a ogni passaggio e non serve a riconoscere i doppioni. Revolut manda il pagamento in
+	un'altra valuta e la sua commissione di cambio con lo stesso `extra.id`: la commissione (senza tipo, «Fee for …»)
+	prende il suffisso, altrimenti il secondo dei due verrebbe scartato come doppione."""
+	extra = transaction_data.get("extra") or {}
 	unique_id = extra.get("id")
-
 	if not unique_id:
-		unique_id = transaction_data.get("transactionId")
-
-	if not unique_id:
-		frappe.throw(_("Transaction ID not found in transaction data"))
-
+		frappe.throw(_("Movimento {0} senza identificativo della banca (extra.id).").format(transaction_data.get("transactionId")))
+	if not extra.get("type") and (transaction_data.get("description") or "").startswith(COMMISSIONE_REVOLUT):
+		return unique_id + SUFFISSO_COMMISSIONE
 	return unique_id
+
+
+def giorno_di_addebito(transaction_data):
+	"""Il giorno in cui il conto cambia (`extra.postingDate`); `madeOn` è la valuta, che per la BCC può essere prima."""
+	giorno = (transaction_data.get("extra") or {}).get("postingDate")
+	if not giorno:
+		frappe.throw(_("Movimento {0} senza giorno di addebito (extra.postingDate).").format(transaction_data.get("transactionId")))
+	return giorno
 
 
 def parse_date(date_string):
@@ -831,7 +834,7 @@ def create_bank_transaction_from_acube(
 			"acube_transaction_log": transaction_log,
 			"acube_transaction_id": unique_id,
 			"api_source": "ACube",
-			"acube_booking_date": parse_date(transaction_data.get("madeOn")),
+			"acube_booking_date": giorno_di_addebito(transaction_data),
 			"acube_value_date": parse_date(transaction_data.get("madeOn")),
 			"acube_status": transaction_data.get("status"),
 			"acube_category": transaction_data.get("category"),
