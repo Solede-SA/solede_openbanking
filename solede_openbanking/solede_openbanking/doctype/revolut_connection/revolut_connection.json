@@ -113,7 +113,7 @@
    "fieldtype": "Column Break"
   },
   {
-   "description": "URL pubblico del callback. Deve coincidere con quello dichiarato sul Developer Portal. Es.: https://erp.solede.it/api/method/solede_openbanking.api.revolut.callback",
+   "description": "URL pubblico del callback. Deve coincidere con quello dichiarato sul certificato Revolut, dove non si cambia. Es.: https://erp.solede.it/api/method/solede_openbanking.api.revolut.callback (i certificati di Solede SRL e Solede SA hanno ancora il vecchio solede_riconciliazione.api.revolut.callback, che risponde uguale)",
    "fieldname": "redirect_uri",
    "fieldtype": "Data",
    "label": "Redirect URI",

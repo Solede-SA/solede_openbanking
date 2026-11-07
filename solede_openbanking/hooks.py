@@ -172,9 +172,9 @@ doc_events = {"Payment Entry": {"before_save": "solede_openbanking.payment_entry
 # Overriding Methods
 # ------------------------------
 #
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "solede_openbanking.event.get_events"
-# }
+# Revolut ha registrato il callback OAuth col percorso di solede_riconciliazione e sul certificato non si cambia: il
+# vecchio indirizzo risponde col callback di adesso.
+override_whitelisted_methods = {"solede_riconciliazione.api.revolut.callback": "solede_openbanking.api.revolut.callback"}
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
