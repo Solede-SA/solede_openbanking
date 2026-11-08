@@ -7,3 +7,4 @@
 solede_openbanking.patches.commissioni_revolut
 solede_openbanking.patches.pulizia_ricezioni_acube
 solede_openbanking.patches.revolut_da_riconciliazione
+solede_openbanking.patches.versioni_registri_acube
