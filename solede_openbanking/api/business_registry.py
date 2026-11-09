@@ -498,6 +498,16 @@ def giorno_di_addebito(transaction_data):
 	return giorno
 
 
+def addebito_del_movimento(bt):
+	"""Il giorno di addebito di un Bank Transaction già importato: per ACube sta in `acube_booking_date` (la data è la
+	valuta), per le altre fonti (Revolut diretto: il giorno in cui il movimento è completato) è la data stessa."""
+	if bt.api_source != "ACube":
+		return bt.date
+	if not bt.acube_booking_date:
+		frappe.throw(_("Movimento {0} senza giorno di addebito.").format(bt.name))
+	return bt.acube_booking_date
+
+
 def parse_date(date_string):
 	"""
 	Converte una stringa data in formato MySQL date.

@@ -12,6 +12,8 @@ from erpnext.accounts.doctype.bank_transaction_rule.bank_transaction_rule import
 from erpnext.setup.utils import get_exchange_rate
 from frappe.utils import flt
 
+from solede_openbanking.api.business_registry import addebito_del_movimento
+
 TOLLERANZA = 0.01
 
 
@@ -46,9 +48,7 @@ def _registra(bt, conto):
 	banca = frappe.get_cached_value("Bank Account", bt.bank_account, "account")
 	importo = bt.unallocated_amount
 	uscita, entrata = (importo, 0) if bt.withdrawal else (0, importo)
-	# ACube dà la valuta nella data e il giorno di addebito a parte; per le altre fonti (Revolut diretto: il giorno in cui
-	# il movimento è completato) la data è già il giorno di addebito.
-	giorno = bt.acube_booking_date if bt.api_source == "ACube" else bt.date
+	giorno = addebito_del_movimento(bt)
 	create_bank_entry_and_reconcile(
 		bank_transaction_name=bt.name,
 		cheque_date=giorno,
