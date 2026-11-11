@@ -1,6 +1,6 @@
 """Movimenti dal collegamento diretto a Revolut: la data di partenza vale sempre e la commissione di cambio compresa si
-registra da sola dove il collegamento lo chiede. Revolut finto, conto Revolut vero di Solede SRL della copia del sito
-di produzione (daeok-copia.localhost). Commit patchato."""
+registra da sola dove il collegamento lo chiede. Revolut finto, conto Revolut di prova della società (fixtures).
+Commit patchato."""
 
 import uuid
 from unittest.mock import patch
@@ -10,9 +10,7 @@ from frappe.tests import IntegrationTestCase
 
 from solede_openbanking import revolut_sync
 from solede_openbanking.api import revolut
-
-CONTO = "Revolut EUR - Solede SRL - Revolut Ltd"
-SPESE = "75.01.07 - Commissioni e spese bancarie - SOSRL"
+from solede_openbanking.tests.fixtures import conto_revolut
 
 
 def _movimento(giorno, importo, commissione=0.0):
@@ -28,17 +26,18 @@ class TestMovimentiRevolut(IntegrationTestCase):
 		p = patch.object(frappe.db, "commit")
 		p.start()
 		self.addCleanup(p.stop)
-		frappe.db.set_value("Bank Account", CONTO, "revolut_account_id", "conto-di-prova")
+		self.conto = conto_revolut()
+		frappe.db.set_value("Bank Account", self.conto.bank_account, "revolut_account_id", "conto-di-prova")
 
 	def _giro(self, *movimenti, registra_commissioni=1):
 		client = object.__new__(revolut.RevolutAPIClient)
 		client.connection_name = "Revolut di prova"
-		client._connection = frappe._dict(importa_movimenti=1, cutover_date="2026-11-07", registra_commissioni=registra_commissioni, conto_commissioni=SPESE)
+		client._connection = frappe._dict(importa_movimenti=1, cutover_date="2026-11-07", registra_commissioni=registra_commissioni, conto_commissioni=self.conto.spese)
 		with patch.object(revolut.RevolutAPIClient, "iter_transactions", return_value=list(movimenti)):
 			return revolut_sync._pull_transactions(client, None, None)
 
 	def _bt(self, movimento):
-		return frappe.get_doc("Bank Transaction", {"transaction_id": movimento["id"], "bank_account": CONTO})
+		return frappe.get_doc("Bank Transaction", {"transaction_id": movimento["id"], "bank_account": self.conto.bank_account})
 
 	def test_prima_della_partenza_non_entra(self):
 		vecchio = _movimento("2026-11-01", 62.78)
@@ -51,7 +50,7 @@ class TestMovimentiRevolut(IntegrationTestCase):
 		bt = self._bt(pagamento)
 		self.assertEqual((bt.withdrawal, bt.included_fee, bt.unallocated_amount), (109.2, 0.65, 108.55))  # resta il netto da abbinare
 		scrittura = frappe.get_doc("Journal Entry", bt.payment_entries[0].payment_entry)
-		self.assertEqual({r.account: r.debit for r in scrittura.accounts}[SPESE], 0.65)
+		self.assertEqual({r.account: r.debit for r in scrittura.accounts}[self.conto.spese], 0.65)
 		self._giro(pagamento)  # il giro dopo lo rilegge: nessun doppione
 		self.assertEqual(frappe.db.count("Bank Transaction", {"transaction_id": pagamento["id"]}), 1)
 
@@ -63,5 +62,5 @@ class TestMovimentiRevolut(IntegrationTestCase):
 	def test_saldo_dal_conto_mappato(self):
 		with patch.object(revolut, "RevolutAPIClient") as client:
 			client.return_value.get_accounts.return_value = [{"id": "altro", "balance": 1}, {"id": "conto-di-prova", "balance": 58082.53}]
-			self.assertEqual(revolut.saldo(CONTO), 58082.53)
-			client.assert_called_once_with(frappe.db.get_value("Bank Account", CONTO, "bank"))
+			self.assertEqual(revolut.saldo(self.conto.bank_account), 58082.53)
+			client.assert_called_once_with(frappe.db.get_value("Bank Account", self.conto.bank_account, "bank"))

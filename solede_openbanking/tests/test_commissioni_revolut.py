@@ -1,6 +1,6 @@
 """Pagamento in un'altra valuta e commissione di cambio Revolut: stesso `extra.id`, due movimenti. E le spese bancarie
 registrate da sole con le regole di ERPNext. Dati presi da un movimento vero (Google del 22/10/2026) con un identificativo
-nuovo, sul conto Revolut di Solede SRL della copia del sito di produzione (daeok-copia.localhost). Commit patchato."""
+nuovo, sul conto Revolut di prova della società (fixtures). Commit patchato."""
 
 import copy
 import json
@@ -13,9 +13,7 @@ from frappe.tests import IntegrationTestCase
 from solede_openbanking import spese_bancarie
 from solede_openbanking.api import business_registry
 from solede_openbanking.api.business_registry import extract_unique_transaction_id, giorno_di_addebito
-
-COMPANY = "Solede SRL"
-CONTO_SPESE = "75.01.07 - Commissioni e spese bancarie - SOSRL"
+from solede_openbanking.tests.fixtures import COMPANY, acube, conto_revolut
 
 PAGAMENTO = {
 	"transactionId": "1922342477802212353",
@@ -45,7 +43,8 @@ class TestCommissioniRevolut(IntegrationTestCase):
 		p = patch.object(frappe.db, "commit")
 		p.start()
 		self.addCleanup(p.stop)
-		self.conto = frappe.get_doc("OpenBanking Settings", COMPANY).accounts[0]
+		self.revolut = conto_revolut()
+		self.conto = acube(self.revolut)
 		self.id = str(uuid.uuid4())
 
 	def _movimento(self, modello):
@@ -111,7 +110,7 @@ class TestCommissioniRevolut(IntegrationTestCase):
 			"description_rules": [{"check": "Starts With", "value": "fee for "}],
 			"classify_as": "Bank Entry",
 			"bank_entry_type": "Single Account",
-			"account": CONTO_SPESE,
+			"account": self.revolut.spese,
 			"priority": -1,  # prima delle regole del sito
 		}).insert()
 
@@ -126,7 +125,7 @@ class TestCommissioniRevolut(IntegrationTestCase):
 		scrittura = frappe.get_doc("Journal Entry", commissione.payment_entries[0].payment_entry)
 		self.assertEqual(str(scrittura.posting_date), "2026-10-23")
 		righe = {r.account: (r.debit, r.credit) for r in scrittura.accounts}
-		self.assertEqual(righe[CONTO_SPESE], (0.65, 0))
+		self.assertEqual(righe[self.revolut.spese], (0.65, 0))
 		self.assertEqual(righe[frappe.db.get_value("Bank Account", commissione.bank_account, "account")], (0, 0.65))
 		# il pagamento non ricade nella regola: resta da abbinare
 		self.assertEqual(frappe.db.get_value("Bank Transaction", importati[self.id].name, "status"), "Unreconciled")
@@ -154,10 +153,10 @@ class TestCommissioniRevolut(IntegrationTestCase):
 		frappe.get_doc({
 			"doctype": "Bank Transaction Rule", "rule_name": f"Canone di prova {self.id}", "company": COMPANY, "transaction_type": "Withdrawal",
 			"description_rules": [{"check": "Contains", "value": f"plan fee {self.id}"}], "classify_as": "Bank Entry",
-			"bank_entry_type": "Single Account", "account": CONTO_SPESE, "priority": -1,
+			"bank_entry_type": "Single Account", "account": self.revolut.spese, "priority": -1,
 		}).insert()
 		bt = frappe.get_doc({
-			"doctype": "Bank Transaction", "date": "2026-11-05", "bank_account": frappe.db.get_value("Bank Account", {"iban": "LT073250067903557127", "company": COMPANY}),
+			"doctype": "Bank Transaction", "date": "2026-11-05", "bank_account": self.revolut.bank_account,
 			"company": COMPANY, "currency": "EUR", "withdrawal": 10, "description": f"Company plan fee {self.id}", "transaction_id": self.id, "status": "Pending",
 		}).insert()
 		bt.submit()
