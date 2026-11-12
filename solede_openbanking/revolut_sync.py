@@ -19,6 +19,7 @@ from solede_openbanking.api.revolut import (
 	RevolutAuthRevokedError,
 	build_revolut_consent_url,
 	create_bank_transaction,
+	in_sospeso,
 	normalize_revolut_api_tx,
 )
 
@@ -31,6 +32,8 @@ SYNC_OVERLAP_DAYS = 14
 
 # Dati Revolut riempiti sulla tx già importata (da CSV o da un altro canale) se mancano
 BACKFILL_FIELDS = ("revolut_balance_after", "revolut_completed_at", "transaction_type")
+# Ciò che l'esito del giro dice di un movimento in sospeso, con i nomi dei campi del movimento bancario
+IN_SOSPESO = ("date", "description", "withdrawal", "deposit", "currency")
 # Confrontati con Revolut ma mai corretti qui: la riga può essere già riconciliata
 COMPARED_FIELDS = ("date", "deposit", "withdrawal", "included_fee")
 
@@ -128,7 +131,22 @@ def _sync_one_connection(connection_name: str) -> dict:
 
 	conn.db_set("last_sync_at", to_dt, update_modified=False)
 	frappe.db.commit()
+	_registra_regole()
 	return result
+
+
+def _conti_revolut():
+	"""I Bank Account collegati a un conto Revolut: dove entrano i movimenti, e di quali società."""
+	return frappe.get_all(
+		"Bank Account", filters={"revolut_account_id": ["is", "set"], "disabled": 0}, fields=["name", "company", "revolut_account_id"],
+	)
+
+
+def _registra_regole() -> None:
+	"""Le regole dei movimenti bancari (spese bancarie, acconti ai fornitori) subito dopo il giro, per le società dei
+	conti Revolut: un movimento appena entrato non aspetta il giro di un'altra fonte."""
+	for company in {conto.company for conto in _conti_revolut()}:
+		spese_bancarie.registra(company)
 
 
 def _pull_transactions(client: RevolutAPIClient, from_dt, to_dt) -> dict:
@@ -139,14 +157,7 @@ def _pull_transactions(client: RevolutAPIClient, from_dt, to_dt) -> dict:
 	if not connessione.importa_movimenti:
 		frappe.throw(f"{client.connection_name} non importa i movimenti: serve solo ai pagamenti, i movimenti di quel conto arrivano da un'altra fonte.")
 	# revolut_account_id → (Bank Account, company), una volta sola
-	account_map = {
-		ba["revolut_account_id"]: (ba["name"], ba["company"])
-		for ba in frappe.get_all(
-			"Bank Account",
-			filters={"revolut_account_id": ["is", "set"], "disabled": 0},
-			fields=["name", "company", "revolut_account_id"],
-		)
-	}
+	account_map = {ba.revolut_account_id: (ba.name, ba.company) for ba in _conti_revolut()}
 
 	# I movimenti prima della data di partenza sono di un'altra fonte (per esempio ACube): mai reimportati, anche
 	# quando il giro rilegge SYNC_OVERLAP_DAYS indietro.
@@ -156,7 +167,12 @@ def _pull_transactions(client: RevolutAPIClient, from_dt, to_dt) -> dict:
 
 	created = skipped = updated = unmapped = 0
 	mismatches = []
+	sospesi = []  # non completati da Revolut: non entrano, si riportano nell'esito
 	for tx in client.iter_transactions(from_dt, to_dt):
+		for voce in in_sospeso(tx):
+			mapping = account_map.get(voce.get("_account_id") or "")
+			if mapping:
+				sospesi.append({"bank_account": mapping[0], **{campo: voce[campo] for campo in IN_SOSPESO}})
 		for normalized in normalize_revolut_api_tx(tx):
 			if getdate(normalized["date"]) < partenza:
 				skipped += 1
@@ -197,6 +213,7 @@ def _pull_transactions(client: RevolutAPIClient, from_dt, to_dt) -> dict:
 		"updated": updated,
 		"unmapped": unmapped,
 		"mismatches": mismatches,
+		"in_sospeso": sospesi,
 	}
 
 

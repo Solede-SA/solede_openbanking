@@ -377,7 +377,17 @@ def normalize_revolut_api_tx(tx: dict) -> list[dict]:
 	verifiche carta: nessun movimento, Revolut non le stampa negli estratti.
 	Un cambio tra conti propri ha due leg, una per conto.
 	"""
-	if (tx.get("state") or "").lower() != "completed":
+	return _legs(tx, "completed")
+
+
+def in_sospeso(tx: dict) -> list[dict]:
+	"""Le stesse voci per una transazione che Revolut non ha ancora completato (una carta, anche per giorni): non si
+	importano, si dicono a chi cerca un addebito appena fatto. La data è quella dell'ultimo aggiornamento."""
+	return _legs(tx, "pending")
+
+
+def _legs(tx: dict, stato: str) -> list[dict]:
+	if (tx.get("state") or "").lower() != stato:
 		return []
 	return [_normalize_leg(tx, leg) for leg in tx.get("legs") or [] if leg.get("amount") or leg.get("fee")]
 

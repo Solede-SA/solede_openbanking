@@ -3,14 +3,14 @@ registra da sola dove il collegamento lo chiede. Revolut finto, conto Revolut di
 Commit patchato."""
 
 import uuid
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
 
 from solede_openbanking import revolut_sync
 from solede_openbanking.api import revolut
-from solede_openbanking.tests.fixtures import conto_revolut
+from solede_openbanking.tests.fixtures import COMPANY, conto_revolut
 
 
 def _movimento(giorno, importo, commissione=0.0):
@@ -53,6 +53,23 @@ class TestMovimentiRevolut(IntegrationTestCase):
 		self.assertEqual({r.account: r.debit for r in scrittura.accounts}[self.conto.spese], 0.65)
 		self._giro(pagamento)  # il giro dopo lo rilegge: nessun doppione
 		self.assertEqual(frappe.db.count("Bank Transaction", {"transaction_id": pagamento["id"]}), 1)
+
+	def test_in_sospeso_non_entra_e_si_vede(self):
+		addebito = {**_movimento("2026-11-12", 2.03), "state": "pending", "created_at": "2026-11-12T12:36:53Z"}
+		del addebito["completed_at"]
+		esito = self._giro(addebito)
+		self.assertEqual(esito["created"], 0)
+		self.assertFalse(frappe.db.exists("Bank Transaction", {"transaction_id": addebito["id"]}))
+		[voce] = esito["in_sospeso"]
+		self.assertIn("Google", voce.pop("description"))
+		self.assertEqual(voce, {"bank_account": self.conto.bank_account, "date": "2026-11-12", "withdrawal": 2.03, "deposit": 0.0, "currency": "EUR"})
+
+	def test_dopo_il_giro_le_regole_della_societa(self):
+		collegamento = MagicMock(cutover_date="2026-11-07", last_sync_at=None)
+		with patch.object(revolut_sync.frappe, "get_doc", return_value=collegamento), patch.object(revolut_sync, "RevolutAPIClient"), \
+				patch.object(revolut_sync, "_pull_transactions", return_value={}), patch.object(revolut_sync.spese_bancarie, "registra") as registra:
+			revolut_sync._sync_one_connection("Revolut di prova")
+		registra.assert_any_call(COMPANY)
 
 	def test_senza_il_campo_la_commissione_resta_li(self):
 		pagamento = _movimento("2026-11-07", 108.55, 0.65)
