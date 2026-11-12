@@ -1,12 +1,15 @@
-"""Le spese bancarie (commissioni, canoni, bolli) si registrano da sole. Le riconosce una regola dei movimenti bancari di
-ERPNext (Bank Transaction Rule) di tipo «Bank Entry» a conto unico, che dice anche il conto: la regola è la decisione di
-Lorenzo, qui si esegue soltanto. Vale per tutti i movimenti della società, da qualunque fonte arrivino (ACube, il
-collegamento diretto a Revolut). La registrazione va nel giorno di addebito e resta collegata al movimento. Le regole di
-altro tipo restano suggerimenti nello strumento di riconciliazione di ERPNext."""
+"""I movimenti che una regola riconosce si registrano da soli: le spese bancarie (commissioni, canoni, bolli) e gli
+acconti ai fornitori pagati prima della fattura (addebiti della carta a ogni soglia di spesa). Li riconosce una regola
+dei movimenti bancari di ERPNext (Bank Transaction Rule): «Bank Entry» a conto unico dice il conto della spesa,
+«Payment Entry» dice a chi va il pagamento e su quale conto, e il pagamento resta non allocato finché la fattura non
+arriva e lo usa. La regola è la decisione di Lorenzo, qui si esegue soltanto. Vale per tutti i movimenti della società,
+da qualunque fonte arrivino (ACube, il collegamento diretto a Revolut). La registrazione va nel giorno di addebito e
+resta collegata al movimento. Le regole di altro tipo restano suggerimenti nello strumento di riconciliazione di ERPNext."""
 
 import frappe
 from erpnext.accounts.doctype.bank_reconciliation_tool.bank_reconciliation_tool import (
 	create_bank_entry_and_reconcile,
+	create_payment_entry_and_reconcile,
 )
 from erpnext.accounts.doctype.bank_transaction_rule.bank_transaction_rule import _run_rule_evaluation
 from erpnext.setup.utils import get_exchange_rate
@@ -15,49 +18,69 @@ from frappe.utils import flt
 from solede_openbanking.api.business_registry import addebito_del_movimento
 
 TOLLERANZA = 0.01
+PAGAMENTO = "Payment Entry"
 
 
 def registra(company):
 	"""Ogni movimento importato e non riconciliato che ricade in una di queste regole. Uno che non si riesce a registrare
 	va nell'Error Log col suo nome, non ferma gli altri e perde la regola: non si riprova ogni ora, resta da abbinare."""
-	regole = dict(frappe.get_all(
-		"Bank Transaction Rule",
-		filters={"company": company, "classify_as": "Bank Entry", "bank_entry_type": ["!=", "Multiple Accounts"]},
-		fields=["name", "account"],
-		as_list=True,
-	))
+	regole = {
+		r.name: r
+		for r in frappe.get_all(
+			"Bank Transaction Rule",
+			filters={"company": company, "classify_as": ["in", ("Bank Entry", PAGAMENTO)]},
+			fields=["name", "classify_as", "bank_entry_type", "account", "party_type", "party"],
+		)
+		if r.classify_as == PAGAMENTO or r.bank_entry_type != "Multiple Accounts"
+	}
 	if not regole:
 		return
 	_run_rule_evaluation()
 	for bt in frappe.get_all(
 		"Bank Transaction",
 		filters={"company": company, "docstatus": 1, "status": "Unreconciled", "matched_transaction_rule": ["in", list(regole)]},
-		fields=["name", "bank_account", "withdrawal", "unallocated_amount", "date", "api_source", "acube_booking_date", "reference_number", "description", "matched_transaction_rule"],
+		fields=["name", "company", "bank_account", "withdrawal", "unallocated_amount", "date", "api_source", "acube_booking_date", "reference_number", "description", "matched_transaction_rule"],
 	):
-		frappe.db.savepoint("spesa_bancaria")
+		frappe.db.savepoint("regola_movimento")
 		try:
 			_registra(bt, regole[bt.matched_transaction_rule])
 		except Exception:
-			frappe.db.rollback(save_point="spesa_bancaria")
-			frappe.log_error(title=f"Spesa bancaria non registrata: {bt.name}")
+			frappe.db.rollback(save_point="regola_movimento")
+			frappe.log_error(title=f"Movimento non registrato dalla regola: {bt.name}")
 			frappe.db.set_value("Bank Transaction", bt.name, "matched_transaction_rule", None)
 		frappe.db.commit()
 
 
-def _registra(bt, conto):
+def _registra(bt, regola):
 	banca = frappe.get_cached_value("Bank Account", bt.bank_account, "account")
 	importo = bt.unallocated_amount
 	uscita, entrata = (importo, 0) if bt.withdrawal else (0, importo)
 	giorno = addebito_del_movimento(bt)
+	numero = (bt.reference_number or bt.description)[:140]  # il numero del movimento; senza (inserito a mano), la descrizione
+	if regola.classify_as == PAGAMENTO:
+		create_payment_entry_and_reconcile(bt.name, {
+			"payment_type": "Pay" if uscita else "Receive",
+			"company": bt.company,
+			"party_type": regola.party_type,
+			"party": regola.party,
+			"paid_from": banca if uscita else regola.account,
+			"paid_to": regola.account if uscita else banca,
+			"paid_amount": importo,
+			"received_amount": importo,
+			"posting_date": giorno,
+			"reference_no": numero,
+			"reference_date": giorno,
+		})
+		return
 	create_bank_entry_and_reconcile(
 		bank_transaction_name=bt.name,
 		cheque_date=giorno,
 		posting_date=giorno,
-		cheque_no=(bt.reference_number or bt.description)[:140],  # il numero del movimento; senza (inserito a mano), la descrizione
+		cheque_no=numero,
 		user_remark=bt.description,
 		entries=[
 			{"account": banca, "bank_account": bt.bank_account, "debit": entrata, "credit": uscita},
-			{"account": conto, "debit": uscita, "credit": entrata},
+			{"account": regola.account, "debit": uscita, "credit": entrata},
 		],
 	)
 

@@ -101,18 +101,29 @@ class TestCommissioniRevolut(IntegrationTestCase):
 		self.assertEqual(frappe.db.get_value("Bank Transaction", vecchio.name, "acube_transaction_id"), PAGAMENTO["transactionId"])
 		self.assertEqual(frappe.db.get_value("Bank Transaction", vivo.name, "acube_transaction_id"), self.id)
 
-	def _regola(self):
+	def _regola(self, valore="fee for ", controllo="Starts With", **campi):
+		"""Una regola di prova: una spesa bancaria a conto unico, salvo i `campi` che la cambiano."""
 		frappe.get_doc({
 			"doctype": "Bank Transaction Rule",
-			"rule_name": f"Commissioni di cambio di prova {self.id}",
+			"rule_name": f"Regola di prova {self.id}",
 			"company": COMPANY,
 			"transaction_type": "Withdrawal",
-			"description_rules": [{"check": "Starts With", "value": "fee for "}],
+			"description_rules": [{"check": controllo, "value": valore}],
+			"priority": -1,  # prima delle regole del sito
 			"classify_as": "Bank Entry",
 			"bank_entry_type": "Single Account",
 			"account": self.revolut.spese,
-			"priority": -1,  # prima delle regole del sito
+			**campi,
 		}).insert()
+
+	def _movimento_diretto(self, descrizione, importo):
+		"""Un movimento arrivato senza ACube (Revolut diretto, file della banca), ancora da abbinare."""
+		bt = frappe.get_doc({
+			"doctype": "Bank Transaction", "date": "2026-11-05", "bank_account": self.revolut.bank_account, "company": COMPANY,
+			"currency": "EUR", "withdrawal": importo, "description": descrizione, "transaction_id": self.id, "status": "Pending",
+		}).insert()
+		bt.submit()
+		return bt
 
 	def test_spesa_registrata_dalla_regola(self):
 		self._regola()
@@ -138,7 +149,7 @@ class TestCommissioniRevolut(IntegrationTestCase):
 				patch.object(frappe, "log_error") as errore:
 			spese_bancarie.registra(COMPANY)
 		self.assertEqual(frappe.db.get_value("Bank Transaction", commissione, ["status", "matched_transaction_rule"]), ("Unreconciled", None))
-		self.assertIn(f"Spesa bancaria non registrata: {commissione}", [c.kwargs["title"] for c in errore.call_args_list])
+		self.assertIn(f"Movimento non registrato dalla regola: {commissione}", [c.kwargs["title"] for c in errore.call_args_list])
 
 	def test_il_registro_copia_solo_i_cambiamenti(self):
 		movimento = self._movimento(PAGAMENTO)
@@ -150,17 +161,27 @@ class TestCommissioniRevolut(IntegrationTestCase):
 		self.assertEqual([json.loads(c)["status"] for c in copie], ["posted"])
 
 	def test_regola_anche_sui_movimenti_non_acube(self):
-		frappe.get_doc({
-			"doctype": "Bank Transaction Rule", "rule_name": f"Canone di prova {self.id}", "company": COMPANY, "transaction_type": "Withdrawal",
-			"description_rules": [{"check": "Contains", "value": f"plan fee {self.id}"}], "classify_as": "Bank Entry",
-			"bank_entry_type": "Single Account", "account": self.revolut.spese, "priority": -1,
-		}).insert()
-		bt = frappe.get_doc({
-			"doctype": "Bank Transaction", "date": "2026-11-05", "bank_account": self.revolut.bank_account,
-			"company": COMPANY, "currency": "EUR", "withdrawal": 10, "description": f"Company plan fee {self.id}", "transaction_id": self.id, "status": "Pending",
-		}).insert()
-		bt.submit()
+		self._regola(f"plan fee {self.id}", "Contains")
+		bt = self._movimento_diretto(f"Company plan fee {self.id}", 10)
 		spese_bancarie.registra(COMPANY)
 		bt.reload()
 		self.assertEqual(bt.status, "Reconciled")
 		self.assertEqual(str(frappe.db.get_value("Journal Entry", bt.payment_entries[0].payment_entry, "posting_date")), "2026-11-05")  # la data del movimento
+
+	def test_acconto_al_fornitore_dalla_regola(self):
+		"""L'addebito della carta di un fornitore che fattura dopo (le inserzioni di Meta): un pagamento non allocato."""
+		fornitore = frappe.get_doc({
+			"doctype": "Supplier", "supplier_name": f"Inserzioni di prova {self.id}", "country": "Ireland",
+			"supplier_group": frappe.db.get_value("Supplier Group", {"is_group": 0}),
+		}).insert().name
+		debiti = frappe.get_cached_value("Company", COMPANY, "default_payable_account")
+		self._regola(f"facebk {self.id}", "Contains", classify_as="Payment Entry", party_type="Supplier", party=fornitore, account=debiti)
+		bt = self._movimento_diretto(f"Facebk {self.id}", 2.03)
+		spese_bancarie.registra(COMPANY)
+		bt.reload()
+		self.assertEqual(bt.status, "Reconciled")
+		pagamento = frappe.get_doc("Payment Entry", bt.payment_entries[0].payment_entry)
+		self.assertEqual(
+			(pagamento.payment_type, pagamento.party, pagamento.paid_to, pagamento.unallocated_amount, str(pagamento.posting_date), pagamento.docstatus),
+			("Pay", fornitore, debiti, 2.03, "2026-11-05", 1),
+		)
