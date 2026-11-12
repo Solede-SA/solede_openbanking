@@ -14,26 +14,25 @@ from frappe.utils.user import get_users_with_role
 
 from solede_openbanking import spese_bancarie
 from solede_openbanking.api.revolut import (
+	ANNULLATI,
 	CONNECTION_STATUS_CONNECTED,
 	RevolutAPIClient,
 	RevolutAuthRevokedError,
 	build_revolut_consent_url,
 	create_bank_transaction,
-	in_sospeso,
 	normalize_revolut_api_tx,
+	stato_revolut,
 )
 
 REAUTH_NOTIFY_COOLDOWN_HOURS = 24
 
 # Giorni riletti a ogni sync oltre a `last_sync_at`: Revolut filtra su created_at e una carta può restare «pending» per
-# giorni; al primo passaggio viene scartata e senza sovrapposizione non verrebbe più ripresa. Idempotente per
-# transaction_id + bank_account.
+# giorni; entra subito in sospeso e senza sovrapposizione non verrebbe più riletta quando Revolut la completa o la
+# annulla. Idempotente per transaction_id + bank_account.
 SYNC_OVERLAP_DAYS = 14
 
 # Dati Revolut riempiti sulla tx già importata (da CSV o da un altro canale) se mancano
 BACKFILL_FIELDS = ("revolut_balance_after", "revolut_completed_at", "transaction_type")
-# Ciò che l'esito del giro dice di un movimento in sospeso, con i nomi dei campi del movimento bancario
-IN_SOSPESO = ("date", "description", "withdrawal", "deposit", "currency")
 # Confrontati con Revolut ma mai corretti qui: la riga può essere già riconciliata
 COMPARED_FIELDS = ("date", "deposit", "withdrawal", "included_fee")
 
@@ -167,12 +166,9 @@ def _pull_transactions(client: RevolutAPIClient, from_dt, to_dt) -> dict:
 
 	created = skipped = updated = unmapped = 0
 	mismatches = []
-	sospesi = []  # non completati da Revolut: non entrano, si riportano nell'esito
 	for tx in client.iter_transactions(from_dt, to_dt):
-		for voce in in_sospeso(tx):
-			mapping = account_map.get(voce.get("_account_id") or "")
-			if mapping:
-				sospesi.append({"bank_account": mapping[0], **{campo: voce[campo] for campo in IN_SOSPESO}})
+		if stato_revolut(tx) in ANNULLATI:
+			mismatches += _annulla_in_sospeso(tx)
 		for normalized in normalize_revolut_api_tx(tx):
 			if getdate(normalized["date"]) < partenza:
 				skipped += 1
@@ -186,7 +182,7 @@ def _pull_transactions(client: RevolutAPIClient, from_dt, to_dt) -> dict:
 			existing = frappe.db.get_value(
 				"Bank Transaction",
 				{"transaction_id": normalized["transaction_id"], "bank_account": bank_account},
-				["name", *BACKFILL_FIELDS, *COMPARED_FIELDS],
+				["name", "revolut_in_sospeso", *BACKFILL_FIELDS, *COMPARED_FIELDS],
 				as_dict=True,
 			)
 			if not existing:
@@ -196,11 +192,18 @@ def _pull_transactions(client: RevolutAPIClient, from_dt, to_dt) -> dict:
 				created += 1
 				continue
 
+			completato = existing.revolut_in_sospeso and not normalized["revolut_in_sospeso"]
+			if completato:
+				# Il giorno diventa quello di completamento, come per i movimenti arrivati già completati: non è una differenza
+				existing.date = normalized["date"]
+
 			differences = _differences(existing, normalized)
 			if differences:
 				mismatches.append({"bank_transaction": existing.name, "differences": differences})
 
 			updates = _backfill_updates(existing, normalized)
+			if completato:
+				updates.update(revolut_in_sospeso=0, date=existing.date)
 			if updates:
 				frappe.db.set_value("Bank Transaction", existing.name, updates, update_modified=False)
 				updated += 1
@@ -213,8 +216,30 @@ def _pull_transactions(client: RevolutAPIClient, from_dt, to_dt) -> dict:
 		"updated": updated,
 		"unmapped": unmapped,
 		"mismatches": mismatches,
-		"in_sospeso": sospesi,
 	}
+
+
+ANNULLATO = "Revolut ha annullato questo movimento"
+
+
+def _annulla_in_sospeso(tx: dict) -> list[dict]:
+	"""Un movimento entrato in sospeso che Revolut ha annullato: non è mai avvenuto. Se non è abbinato a nulla si annulla
+	anche qui. Se è già abbinato non si disfa niente: va fra le differenze dell'esito e, una volta sola (il giro lo
+	rilegge per giorni), in un commento sul movimento e nell'Error Log, perché la registrazione va disfatta a mano."""
+	differenze = []
+	for name in frappe.get_all("Bank Transaction", filters={"transaction_id": tx.get("id"), "revolut_in_sospeso": 1, "docstatus": 1}, pluck="name"):
+		bt = frappe.get_doc("Bank Transaction", name)
+		if not bt.payment_entries:
+			bt.cancel()
+			continue
+		abbinato = ", ".join(p.payment_entry for p in bt.payment_entries)
+		differenze.append({"bank_transaction": name, "differences": {"state": (f"in sospeso, abbinato a {abbinato}", stato_revolut(tx))}})
+		gia_detto = {"reference_doctype": "Bank Transaction", "reference_name": name, "content": ["like", f"%{ANNULLATO}%"]}
+		if not frappe.db.exists("Comment", gia_detto):
+			testo = f"{ANNULLATO} ({stato_revolut(tx)}), ma è già abbinato a {abbinato}: la registrazione va disfatta a mano."
+			bt.add_comment("Comment", testo)
+			frappe.log_error(title=f"Revolut ha annullato un movimento già abbinato: {name}", message=testo)
+	return differenze
 
 
 def _backfill_updates(existing, normalized: dict) -> dict:

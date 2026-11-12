@@ -265,6 +265,7 @@ fixtures = [
 					"Bank Transaction-solede_beneficiary_iban",
 					"Bank Transaction-revolut_completed_at",
 					"Bank Transaction-revolut_balance_after",
+					"Bank Transaction-revolut_in_sospeso",
 					"Bank Account-revolut_account_id",
 				],
 			]

@@ -500,7 +500,8 @@ def giorno_di_addebito(transaction_data):
 
 def addebito_del_movimento(bt):
 	"""Il giorno di addebito di un Bank Transaction già importato: per ACube sta in `acube_booking_date` (la data è la
-	valuta), per le altre fonti (Revolut diretto: il giorno in cui il movimento è completato) è la data stessa."""
+	valuta), per le altre fonti (Revolut diretto: il giorno in cui il movimento è completato, o in cui è stato fatto
+	finché è in sospeso) è la data stessa."""
 	if bt.api_source != "ACube":
 		return bt.date
 	if not bt.acube_booking_date:

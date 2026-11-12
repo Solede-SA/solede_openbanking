@@ -165,6 +165,7 @@ def insert_bank_transaction(
 			"solede_beneficiary_iban": normalized.get("solede_beneficiary_iban"),
 			"revolut_balance_after": flt(balance_after) if balance_after is not None else None,
 			"revolut_completed_at": normalized.get("revolut_completed_at"),
+			"revolut_in_sospeso": normalized.get("revolut_in_sospeso"),
 			"status": "Pending",
 		}
 	)

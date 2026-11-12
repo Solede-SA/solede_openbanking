@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from solede_openbanking import revolut_sync
+from solede_openbanking import revolut_sync, spese_bancarie
 from solede_openbanking.api import revolut
 from solede_openbanking.tests.fixtures import COMPANY, conto_revolut
 
@@ -54,15 +54,42 @@ class TestMovimentiRevolut(IntegrationTestCase):
 		self._giro(pagamento)  # il giro dopo lo rilegge: nessun doppione
 		self.assertEqual(frappe.db.count("Bank Transaction", {"transaction_id": pagamento["id"]}), 1)
 
-	def test_in_sospeso_non_entra_e_si_vede(self):
-		addebito = {**_movimento("2026-11-12", 2.03), "state": "pending", "created_at": "2026-11-12T12:36:53Z"}
+	def _in_sospeso(self, importo):
+		"""Un pagamento con carta che Revolut non ha ancora completato."""
+		addebito = {**_movimento("2026-11-12", importo), "state": "pending", "created_at": "2026-11-12T12:36:53Z"}
 		del addebito["completed_at"]
-		esito = self._giro(addebito)
-		self.assertEqual(esito["created"], 0)
-		self.assertFalse(frappe.db.exists("Bank Transaction", {"transaction_id": addebito["id"]}))
-		[voce] = esito["in_sospeso"]
-		self.assertIn("Google", voce.pop("description"))
-		self.assertEqual(voce, {"bank_account": self.conto.bank_account, "date": "2026-11-12", "withdrawal": 2.03, "deposit": 0.0, "currency": "EUR"})
+		return addebito
+
+	def test_in_sospeso_entra_e_poi_si_completa(self):
+		addebito = self._in_sospeso(2.03)
+		self.assertEqual(self._giro(addebito)["created"], 1)
+		bt = self._bt(addebito)
+		self.assertEqual((bt.revolut_in_sospeso, str(bt.date), bt.revolut_completed_at, bt.withdrawal), (1, "2026-11-12", None, 2.03))
+		self.assertEqual(self._giro(addebito)["mismatches"], [])  # riletto ancora in sospeso: niente cambia
+		esito = self._giro({**addebito, "state": "completed", "completed_at": "2026-11-14T09:00:00Z"})
+		self.assertEqual((esito["created"], esito["updated"], esito["mismatches"]), (0, 1, []))
+		bt = self._bt(addebito)
+		# il giorno diventa quello di completamento, con il saldo di Revolut
+		self.assertEqual((bt.revolut_in_sospeso, str(bt.date), str(bt.revolut_completed_at), bt.revolut_balance_after), (0, "2026-11-14", "2026-11-14 09:00:00", 1000))
+
+	def test_annullato_da_revolut(self):
+		libero, abbinato = self._in_sospeso(2.03), self._in_sospeso(5.0)
+		self._giro(libero, abbinato)
+		# il secondo è già registrato, come farebbe una regola dei movimenti
+		spese_bancarie._registra(self._bt(abbinato), frappe._dict(classify_as="Bank Entry", account=self.conto.spese))
+		annullati = ({**libero, "state": "reverted"}, {**abbinato, "state": "declined"})
+		# l'Error Log si scrive da sé, fuori dalla transazione del test: qui si guarda solo che venga chiesto
+		with patch.object(frappe, "log_error") as errore:
+			esito = self._giro(*annullati)
+			self._giro(*annullati)  # il giro lo rilegge per giorni: si dice una volta sola
+		self.assertEqual(self._bt(libero).docstatus, 2)  # mai avvenuto e non abbinato: annullato anche qui
+		registrato = self._bt(abbinato)
+		self.assertEqual((registrato.docstatus, registrato.status), (1, "Reconciled"))  # abbinato: non si disfa niente
+		[differenza] = esito["mismatches"]
+		self.assertEqual((differenza["bank_transaction"], differenza["differences"]["state"][1]), (registrato.name, "declined"))
+		self.assertIn(registrato.payment_entries[0].payment_entry, differenza["differences"]["state"][0])
+		self.assertEqual([c.kwargs["title"] for c in errore.call_args_list], [f"Revolut ha annullato un movimento già abbinato: {registrato.name}"])
+		self.assertEqual(frappe.db.count("Comment", {"reference_doctype": "Bank Transaction", "reference_name": registrato.name, "content": ["like", f"%{revolut_sync.ANNULLATO}%"]}), 1)
 
 	def test_dopo_il_giro_le_regole_della_societa(self):
 		collegamento = MagicMock(cutover_date="2026-11-07", last_sync_at=None)

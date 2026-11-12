@@ -371,25 +371,22 @@ def _to_iso8601(value: _dt.datetime) -> str:
 def normalize_revolut_api_tx(tx: dict) -> list[dict]:
 	"""Trasforma una transazione Revolut in voci allineate a `BankCSVParser.parse()`, una per leg.
 
-	Lista vuota se la transazione non va importata: stato diverso da completed (una
-	carta resta «pending» anche per giorni: la riprende un sync successivo grazie a
-	SYNC_OVERLAP_DAYS) oppure nessuna leg. Le leg a importo e commissione zero sono
-	verifiche carta: nessun movimento, Revolut non le stampa negli estratti.
-	Un cambio tra conti propri ha due leg, una per conto.
+	Lista vuota se la transazione non va importata: né completata né in sospeso (che entra
+	col segno `revolut_in_sospeso`: il saldo di Revolut la conta già), oppure nessuna leg.
+	Le leg a importo e commissione zero sono verifiche carta: nessun movimento, Revolut non
+	le stampa negli estratti. Un cambio tra conti propri ha due leg, una per conto.
 	"""
-	return _legs(tx, "completed")
-
-
-def in_sospeso(tx: dict) -> list[dict]:
-	"""Le stesse voci per una transazione che Revolut non ha ancora completato (una carta, anche per giorni): non si
-	importano, si dicono a chi cerca un addebito appena fatto. La data è quella dell'ultimo aggiornamento."""
-	return _legs(tx, "pending")
-
-
-def _legs(tx: dict, stato: str) -> list[dict]:
-	if (tx.get("state") or "").lower() != stato:
+	if stato_revolut(tx) not in (IN_SOSPESO, "completed"):
 		return []
 	return [_normalize_leg(tx, leg) for leg in tx.get("legs") or [] if leg.get("amount") or leg.get("fee")]
+
+
+IN_SOSPESO = "pending"
+ANNULLATI = ("declined", "failed", "reverted")  # un movimento in sospeso può finire così: non è mai avvenuto
+
+
+def stato_revolut(tx: dict) -> str:
+	return (tx.get("state") or "").lower()
 
 
 def _normalize_leg(tx: dict, leg: dict) -> dict:
@@ -409,7 +406,9 @@ def _normalize_leg(tx: dict, leg: dict) -> dict:
 	beneficiary_iban = (counterparty.get("iban") or counterparty.get("account_no") or "").strip() or None
 
 	# Al secondo, per ordinare le tx dello stesso giorno (Frappe Datetime senza fuso né microsecondi)
-	completed_at = get_datetime(tx.get("completed_at") or tx.get("updated_at") or tx.get("created_at"))
+	in_sospeso = stato_revolut(tx) == IN_SOSPESO
+	# In sospeso vale il giorno in cui il movimento è stato fatto: l'ultimo aggiornamento cambia finché Revolut non lo completa
+	momento = get_datetime(tx["created_at"] if in_sospeso else tx.get("completed_at") or tx.get("updated_at") or tx.get("created_at"))
 
 	merchant = tx.get("merchant") or {}
 	payer_name = (
@@ -421,7 +420,7 @@ def _normalize_leg(tx: dict, leg: dict) -> dict:
 	balance_after = leg.get("balance")
 
 	return {
-		"date": completed_at.date().isoformat(),
+		"date": momento.date().isoformat(),
 		"transaction_id": tx.get("id"),
 		"description": _build_description(tx, leg),
 		# La commissione esce insieme all'importo: movimento totale, commissione a parte
@@ -432,8 +431,10 @@ def _normalize_leg(tx: dict, leg: dict) -> dict:
 		"solede_orig_currency": orig_currency,
 		"solede_orig_amount": orig_amount,
 		"solede_beneficiary_iban": beneficiary_iban,
-		"revolut_balance_after": float(balance_after) if balance_after is not None else None,
-		"revolut_completed_at": completed_at.strftime("%Y-%m-%d %H:%M:%S"),
+		# In sospeso restano vuoti: li riempie il sync al completamento (BACKFILL_FIELDS)
+		"revolut_balance_after": float(balance_after) if balance_after is not None and not in_sospeso else None,
+		"revolut_completed_at": None if in_sospeso else momento.strftime("%Y-%m-%d %H:%M:%S"),
+		"revolut_in_sospeso": int(in_sospeso),
 		"_account_id": leg.get("account_id"),  # per resolve Bank Account
 	}
 

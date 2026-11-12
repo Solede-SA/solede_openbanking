@@ -2,8 +2,8 @@
 
 Casi emersi dagli estratti CHF giugno–settembre 2026: commissione di cambio compresa
 nel withdrawal (semantica ERPNext `included_fee` e «Total amount» del CSV), carte
-«pending» scartate, verifiche carta a zero ignorate, cambio tra conti propri con
-una voce per leg.
+«pending» importate col segno in sospeso, verifiche carta a zero ignorate, cambio tra
+conti propri con una voce per leg.
 """
 
 import frappe
@@ -56,8 +56,18 @@ class TestNormalizeRevolutApiTx(IntegrationTestCase):
 		self.assertEqual(entry["_account_id"], CHF_ACCOUNT)
 		self.assertEqual(entry["description"], "Anthropic - [card_payment]")
 
-	def test_pending_non_importata(self):
-		self.assertEqual(normalize_revolut_api_tx(_tx(state="pending")), [])
+	def test_in_sospeso_entra_col_segno(self):
+		tx = {**_tx(state="pending"), "created_at": "2026-07-18T22:10:00Z", "updated_at": "2026-07-19T08:00:00Z"}
+		del tx["completed_at"]
+		(entry,) = normalize_revolut_api_tx(tx)
+		# il giorno è quello in cui è stato fatto; saldo e ora arrivano col completamento
+		self.assertEqual(
+			(entry["revolut_in_sospeso"], entry["date"], entry["revolut_completed_at"], entry["revolut_balance_after"]), (1, "2026-07-18", None, None),
+		)
+		self.assertEqual(normalize_revolut_api_tx(_tx())[0]["revolut_in_sospeso"], 0)
+
+	def test_annullata_non_importata(self):
+		self.assertEqual(normalize_revolut_api_tx(_tx(state="reverted")), [])
 
 	def test_verifica_carta_a_zero_ignorata(self):
 		self.assertEqual(normalize_revolut_api_tx(_tx(legs=[_card_leg(amount=0, fee=0)])), [])
