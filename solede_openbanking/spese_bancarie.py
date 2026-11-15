@@ -52,37 +52,53 @@ def registra(company):
 
 
 def _registra(bt, regola):
-	banca = frappe.get_cached_value("Bank Account", bt.bank_account, "account")
+	giorno = addebito_del_movimento(bt)
+	if regola.classify_as != PAGAMENTO:
+		registra_su_conto(bt, regola.account, giorno, bt.description)
+		return
+	importo = bt.unallocated_amount
+	banca = _conto_bancario(bt)
+	create_payment_entry_and_reconcile(bt.name, {
+		"payment_type": "Pay" if bt.withdrawal else "Receive",
+		"company": bt.company,
+		"party_type": regola.party_type,
+		"party": regola.party,
+		"paid_from": banca if bt.withdrawal else regola.account,
+		"paid_to": regola.account if bt.withdrawal else banca,
+		"paid_amount": importo,
+		"received_amount": importo,
+		"posting_date": giorno,
+		"reference_no": _numero(bt),
+		"reference_date": giorno,
+	})
+
+
+def registra_su_conto(bt, conto, giorno, nota, cost_center=None):
+	"""Il residuo del movimento su `conto` (aumenta la spesa se è un addebito, l'entrata se è un accredito) con una
+	scrittura nel `giorno`, già abbinata al movimento. La usano le regole «Bank Entry» e le spese delle fiere
+	(solede_fiera, col centro di costo dell'evento); senza `cost_center` ERPNext mette quello della società."""
 	importo = bt.unallocated_amount
 	uscita, entrata = (importo, 0) if bt.withdrawal else (0, importo)
-	giorno = addebito_del_movimento(bt)
-	numero = (bt.reference_number or bt.description)[:140]  # il numero del movimento; senza (inserito a mano), la descrizione
-	if regola.classify_as == PAGAMENTO:
-		create_payment_entry_and_reconcile(bt.name, {
-			"payment_type": "Pay" if uscita else "Receive",
-			"company": bt.company,
-			"party_type": regola.party_type,
-			"party": regola.party,
-			"paid_from": banca if uscita else regola.account,
-			"paid_to": regola.account if uscita else banca,
-			"paid_amount": importo,
-			"received_amount": importo,
-			"posting_date": giorno,
-			"reference_no": numero,
-			"reference_date": giorno,
-		})
-		return
-	create_bank_entry_and_reconcile(
+	return create_bank_entry_and_reconcile(
 		bank_transaction_name=bt.name,
 		cheque_date=giorno,
 		posting_date=giorno,
-		cheque_no=numero,
-		user_remark=bt.description,
+		cheque_no=_numero(bt),
+		user_remark=nota,
 		entries=[
-			{"account": banca, "bank_account": bt.bank_account, "debit": entrata, "credit": uscita},
-			{"account": regola.account, "debit": uscita, "credit": entrata},
+			{"account": _conto_bancario(bt), "bank_account": bt.bank_account, "debit": entrata, "credit": uscita},
+			{"account": conto, "cost_center": cost_center, "debit": uscita, "credit": entrata},
 		],
-	)
+	)["journal_entry"]
+
+
+def _conto_bancario(bt):
+	return frappe.get_cached_value("Bank Account", bt.bank_account, "account")
+
+
+def _numero(bt):
+	"""Il numero del movimento; senza (inserito a mano), la descrizione."""
+	return (bt.reference_number or bt.description)[:140]
 
 
 def registra_commissione_compresa(bt, conto):
