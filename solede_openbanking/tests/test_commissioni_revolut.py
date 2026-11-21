@@ -35,6 +35,14 @@ COMMISSIONE = {
 	"category": "uncategorized",
 	"extra": {"id": "", "postingDate": "2026-10-23"},
 }
+# Il bonifico BCC del 20/11/2026; codice, giorno e descrizione li mette `_bcc`
+BONIFICO_BCC = {
+	"amount": "766.04",
+	"currencyCode": "EUR",
+	"category": "financials",
+	"duplicated": False,
+	"extra": {"accountBalanceSnapshot": 15010.35, "categorizationConfidence": 1},
+}
 
 
 class TestCommissioniRevolut(IntegrationTestCase):
@@ -88,6 +96,47 @@ class TestCommissioniRevolut(IntegrationTestCase):
 				self.assertEqual(str(importati[self.id].date), "2026-10-22")
 				# il giro dopo li riceve di nuovo: nessun doppione
 				self.assertEqual(len(self._importa(*(self._movimento(m) for m in ordine))), 2)
+
+	def _bcc(self, giorno, numero, stato):
+		movimento = copy.deepcopy(BONIFICO_BCC)
+		movimento.update({
+			"transactionId": str(uuid.uuid4()), "status": stato, "madeOn": f"{giorno}T00:00:00Z",
+			"description": f"Bonifico a vs favore *INST 13:07 DI PROVA {self.id}", "account": {"uuid": self.conto.uuid},
+		})
+		movimento["extra"].update({"id": f"{giorno.replace('-', '')}-{numero}", "postingDate": giorno})
+		return movimento
+
+	def _movimenti_bcc(self):
+		"""Codice e stato dei movimenti BCC del test, in ordine di arrivo."""
+		return [
+			(m.acube_transaction_id, m.acube_status)
+			for m in frappe.get_all(
+				"Bank Transaction", filters={"description": ["like", f"%{self.id}"]},
+				fields=["acube_transaction_id", "acube_status"], order_by="creation",
+			)
+		]
+
+	def test_bcc_in_attesa_poi_contabilizzato(self):
+		"""La BCC rimanda il movimento contabilizzato con un codice nuovo: resta lo stesso, anche ai giri dopo."""
+		giorno = "2031-11-20"  # ogni test un suo giorno: i codici BCC sono solo giorno e numero
+		for numero, stato in ((0, "pending"), (0, "pending"), (1, "posted"), (1, "posted")):
+			self._importa(self._bcc(giorno, numero, stato))
+		self.assertEqual(self._movimenti_bcc(), [("20311120-0", "posted")])
+
+	def test_bcc_due_bonifici_uguali_restano_due(self):
+		"""Due bonifici uguali in attesa hanno lo stesso codice (-0): il secondo entra quando è contabilizzato."""
+		giorno = "2031-11-21"
+		self._importa(self._bcc(giorno, 0, "pending"), self._bcc(giorno, 0, "pending"))
+		for _giro in range(2):
+			self._importa(self._bcc(giorno, 1, "posted"), self._bcc(giorno, 2, "posted"))
+		self.assertEqual(self._movimenti_bcc(), [("20311121-0", "posted"), ("20311121-2", "posted")])
+
+	def test_revolut_due_pagamenti_uguali_restano_due(self):
+		"""Con un codice vero il confronto per contenuto non si fa: due pagamenti uguali dello stesso giorno restano due."""
+		secondo = self._movimento(PAGAMENTO)
+		secondo["status"] = "posted"
+		secondo["extra"]["id"] = f"{self.id}-2"
+		self.assertEqual(len(self._importa(self._movimento(PAGAMENTO), secondo)), 2)
 
 	def test_la_patch_lascia_stare_i_movimenti_annullati(self):
 		from solede_openbanking.patches import commissioni_revolut

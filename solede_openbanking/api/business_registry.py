@@ -13,6 +13,7 @@ from frappe.utils import flt
 from frappe.utils.caching import request_cache
 
 from solede_openbanking.api.client import ACubeAPIClient
+from solede_openbanking.solede_openbanking.parsers.base import movement
 
 
 def format_currency(amount, currency="EUR"):
@@ -509,6 +510,43 @@ def addebito_del_movimento(bt):
 	return bt.acube_booking_date
 
 
+def importo_e_descrizione(transaction_data):
+	"""Entrata, uscita e descrizione del Bank Transaction, come le scrive l'importazione."""
+	return {**movement(float(transaction_data.get("amount", 0))), "description": transaction_data.get("description", "")[:140]}
+
+
+def codice_del_giorno(transaction_data):
+	"""Vero se `extra.id` è solo il giorno di addebito e un numero, come per la BCC (20261120-1): un codice che dice la
+	posizione del movimento nel giorno, non quale movimento è."""
+	giorno = giorno_di_addebito(transaction_data).replace("-", "")
+	return re.fullmatch(rf"{giorno}-\d+", transaction_data["extra"]["id"]) is not None
+
+
+def movimento_in_attesa(transaction_data, bank_account):
+	"""Il Bank Transaction in attesa di cui questo movimento contabilizzato è la nuova versione, o None. La BCC rimanda
+	il movimento contabilizzato con un codice nuovo (in attesa 20261120-0, poi 20261120-1): si riconosce da conto, giorno,
+	importo e descrizione. Il trovato passa a contabilizzato, così non lo prende un secondo bonifico uguale. Mai con i
+	codici veri (Revolut): unirebbe due pagamenti uguali dello stesso giorno."""
+	if transaction_data.get("status") != "posted" or not codice_del_giorno(transaction_data):
+		return None
+	bank_txn = frappe.db.get_value(
+		"Bank Transaction",
+		{
+			"bank_account": bank_account,
+			"api_source": "ACube",
+			"docstatus": 1,
+			"acube_status": "pending",
+			"acube_booking_date": giorno_di_addebito(transaction_data),
+			**importo_e_descrizione(transaction_data),
+		},
+		"name",
+		order_by="creation",
+	)
+	if bank_txn:
+		frappe.db.set_value("Bank Transaction", bank_txn, "acube_status", "posted")
+	return bank_txn
+
+
 def parse_date(date_string):
 	"""
 	Converte una stringa data in formato MySQL date.
@@ -680,9 +718,12 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 							bank_account=bank_account,
 						).name
 
-					# 4. Controlla se esiste già il Bank Transaction con questo ID univoco
-					existing_bank_txn = frappe.db.exists(
-						"Bank Transaction", {"acube_transaction_id": unique_id}
+					# 4. Il Bank Transaction del movimento: già legato al registro, con lo stesso codice o, per la BCC,
+					# quello in attesa di cui questo è la versione contabilizzata
+					existing_bank_txn = (
+						frappe.db.get_value("ACube Transaction Log", log_name, "bank_transaction")
+						or frappe.db.exists("Bank Transaction", {"acube_transaction_id": unique_id})
+						or movimento_in_attesa(txn, bank_account)
 					)
 
 					if existing_bank_txn:
@@ -823,11 +864,6 @@ def create_bank_transaction_from_acube(
 		Bank Transaction document
 	"""
 	unique_id = extract_unique_transaction_id(transaction_data)
-	amount = float(transaction_data.get("amount", 0))
-
-	# Determina deposit/withdrawal
-	deposit = amount if amount > 0 else 0
-	withdrawal = abs(amount) if amount < 0 else 0
 
 	# Crea Bank Transaction
 	bank_txn = frappe.get_doc(
@@ -837,10 +873,8 @@ def create_bank_transaction_from_acube(
 			"status": "Pending",
 			"bank_account": bank_account,
 			"company": company,
-			"deposit": deposit,
-			"withdrawal": withdrawal,
+			**importo_e_descrizione(transaction_data),
 			"currency": transaction_data.get("currencyCode"),
-			"description": transaction_data.get("description", "")[:140],
 			"reference_number": unique_id,
 			"transaction_id": unique_id,
 			# Custom fields ACube
