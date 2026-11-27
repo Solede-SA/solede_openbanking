@@ -483,12 +483,23 @@ def versione(transaction_data):
 	return json.dumps({chiave: valore for chiave, valore in transaction_data.items() if chiave != "fetchedAt"}, sort_keys=True)
 
 
+def movimenti_ricevuti(log_name):
+	"""I movimenti nel registro, nell'ordine di arrivo: quello della prima ricezione e quelli delle copie."""
+	return [
+		json.loads(dati)
+		for dati in [
+			frappe.db.get_value("ACube Transaction Log", log_name, "raw_data"),
+			*frappe.get_all(
+				"ACube Transaction Reception", filters={"parent": log_name, "parenttype": "ACube Transaction Log"},
+				pluck="raw_data", order_by="idx asc",
+			),
+		]
+	]
+
+
 def versioni_salvate(log_name):
-	"""Le versioni già nel registro: quella della prima ricezione e quelle delle copie."""
-	dati = [frappe.db.get_value("ACube Transaction Log", log_name, "raw_data")] + frappe.get_all(
-		"ACube Transaction Reception", filters={"parent": log_name, "parenttype": "ACube Transaction Log"}, pluck="raw_data"
-	)
-	return {versione(json.loads(d)) for d in dati}
+	"""Le versioni già nel registro."""
+	return {versione(movimento) for movimento in movimenti_ricevuti(log_name)}
 
 
 def giorno_di_addebito(transaction_data):
@@ -525,11 +536,11 @@ def codice_del_giorno(transaction_data):
 def movimento_in_attesa(transaction_data, bank_account):
 	"""Il Bank Transaction in attesa di cui questo movimento contabilizzato è la nuova versione, o None. La BCC rimanda
 	il movimento contabilizzato con un codice nuovo (in attesa 20261120-0, poi 20261120-1): si riconosce da conto, giorno,
-	importo e descrizione. Il trovato passa a contabilizzato, così non lo prende un secondo bonifico uguale. Mai con i
-	codici veri (Revolut): unirebbe due pagamenti uguali dello stesso giorno."""
+	importo e descrizione. L'importazione lo passa subito a contabilizzato (`contabilizza`), così non lo prende un
+	secondo bonifico uguale. Mai con i codici veri (Revolut): unirebbe due pagamenti uguali dello stesso giorno."""
 	if transaction_data.get("status") != "posted" or not codice_del_giorno(transaction_data):
 		return None
-	bank_txn = frappe.db.get_value(
+	return frappe.db.get_value(
 		"Bank Transaction",
 		{
 			"bank_account": bank_account,
@@ -542,9 +553,29 @@ def movimento_in_attesa(transaction_data, bank_account):
 		"name",
 		order_by="creation",
 	)
-	if bank_txn:
-		frappe.db.set_value("Bank Transaction", bank_txn, "acube_status", "posted")
-	return bank_txn
+
+
+def contabilizza(bank_transaction, transaction_data, transaction_log):
+	"""La versione contabilizzata di un movimento confermato ancora in attesa (stesso identificativo per Revolut, codice
+	nuovo per la BCC): il movimento e il registro passano a contabilizzato. Se la banca lo ha contabilizzato con un
+	altro importo o un'altra descrizione si ferma con l'errore e il movimento resta com'è: va guardato, non corretto da
+	solo."""
+	if transaction_data.get("status") != "posted":
+		return
+	bt = frappe.db.get_value(
+		"Bank Transaction", bank_transaction, ["docstatus", "acube_status", "deposit", "withdrawal", "description"], as_dict=True,
+	)
+	if bt.docstatus != 1 or bt.acube_status != "pending":
+		return
+	nuovo = importo_e_descrizione(transaction_data)
+	if (flt(bt.deposit, 2), flt(bt.withdrawal, 2), bt.description) != (flt(nuovo["deposit"], 2), flt(nuovo["withdrawal"], 2), nuovo["description"]):
+		frappe.throw(
+			_("Movimento {0}: la banca lo ha contabilizzato come «{1}» di {2}, qui è «{3}» di {4}. Va controllato a mano.").format(
+				bank_transaction, nuovo["description"], flt(nuovo["deposit"] or nuovo["withdrawal"], 2), bt.description, flt(bt.deposit or bt.withdrawal, 2),
+			)
+		)
+	frappe.db.set_value("Bank Transaction", bank_transaction, "acube_status", "posted")
+	frappe.db.set_value("ACube Transaction Log", transaction_log, "transaction_status", "posted")
 
 
 def parse_date(date_string):
@@ -733,23 +764,17 @@ def import_transactions(company, account_uuid=None, from_date=None, to_date=None
 						frappe.db.set_value(
 							"ACube Transaction Log", log_name, "bank_transaction", existing_bank_txn
 						)
+						contabilizza(existing_bank_txn, txn, log_name)
 						skipped_count += 1
 						skip_reasons["already_imported"] += 1
 						continue
 
-					# 5. Crea Bank Transaction
+					# 5. Crea Bank Transaction, legato al registro
 					bank_txn = create_bank_transaction_from_acube(
 						company=company,
 						bank_account=bank_account,
-						account_info=account_info,
 						transaction_data=txn,
 						transaction_log=log_name,
-					)
-
-					# 6. Aggiorna log con successo
-					frappe.db.set_value("ACube Transaction Log", log_name, "import_status", "Imported")
-					frappe.db.set_value(
-						"ACube Transaction Log", log_name, "bank_transaction", bank_txn.name
 					)
 
 					imported_count += 1
@@ -847,22 +872,8 @@ def create_transaction_log(company, account_uuid, transaction_data, bank_account
 	return log
 
 
-def create_bank_transaction_from_acube(
-	company, bank_account, account_info, transaction_data, transaction_log=None
-):
-	"""
-	Crea un Bank Transaction da dati ACube.
-
-	Args:
-		company: Company
-		bank_account: Bank Account ERPNext
-		account_info: Info account dalla child table
-		transaction_data: Dati transazione da API
-		transaction_log: Nome del documento ACube Transaction Log (opzionale)
-
-	Returns:
-		Bank Transaction document
-	"""
+def create_bank_transaction_from_acube(company, bank_account, transaction_data, transaction_log):
+	"""Il Bank Transaction confermato del movimento ACube, legato al suo registro, che passa a «Imported»."""
 	unique_id = extract_unique_transaction_id(transaction_data)
 
 	# Crea Bank Transaction
@@ -900,6 +911,7 @@ def create_bank_transaction_from_acube(
 
 	bank_txn.insert(ignore_permissions=True)
 	bank_txn.submit()
+	frappe.db.set_value("ACube Transaction Log", transaction_log, {"import_status": "Imported", "bank_transaction": bank_txn.name})
 	return bank_txn
 
 

@@ -13,6 +13,7 @@ from frappe.tests import IntegrationTestCase
 from solede_openbanking import spese_bancarie
 from solede_openbanking.api import business_registry
 from solede_openbanking.api.business_registry import extract_unique_transaction_id, giorno_di_addebito
+from solede_openbanking.patches import commissioni_revolut, versioni_acube_recuperate
 from solede_openbanking.tests.fixtures import COMPANY, acube, conto_revolut
 
 PAGAMENTO = {
@@ -131,6 +132,49 @@ class TestCommissioniRevolut(IntegrationTestCase):
 			self._importa(self._bcc(giorno, 1, "posted"), self._bcc(giorno, 2, "posted"))
 		self.assertEqual(self._movimenti_bcc(), [("20311121-0", "posted"), ("20311121-2", "posted")])
 
+	def _contabilizzato(self, modello, **campi):
+		"""La versione contabilizzata di `modello`: lo stesso `extra.id`, un `transactionId` nuovo."""
+		movimento = self._movimento(modello)
+		movimento.update({"transactionId": str(uuid.uuid4()), "status": "posted", **campi})
+		return movimento
+
+	def _registro(self, identificativo):
+		return frappe.db.get_value(
+			"ACube Transaction Log", {"acube_transaction_id": identificativo},
+			["name", "transaction_status", "import_status", "error_message"], as_dict=True,
+		)
+
+	def test_revolut_in_attesa_poi_contabilizzato(self):
+		self._importa(self._movimento(PAGAMENTO))
+		self._importa(self._contabilizzato(PAGAMENTO))
+		self.assertEqual(frappe.db.get_value("Bank Transaction", {"acube_transaction_id": self.id}, "acube_status"), "posted")
+		self.assertEqual(self._registro(self.id).transaction_status, "posted")
+
+	def test_contabilizzato_con_altro_importo_si_ferma(self):
+		self._importa(self._movimento(PAGAMENTO))
+		importati = self._importa(self._contabilizzato(PAGAMENTO, amount="-110.00"))
+		self.assertEqual(importati[self.id].withdrawal, 108.55)
+		self.assertEqual(frappe.db.get_value("Bank Transaction", {"acube_transaction_id": self.id}, "acube_status"), "pending")
+		registro = self._registro(self.id)
+		self.assertEqual(registro.import_status, "Failed")
+		self.assertIn("Va controllato a mano", registro.error_message)
+
+	def test_recupera_commissione_e_stato_dalle_ricezioni(self):
+		"""Il registro di allora: pagamento in attesa, poi commissione e pagamento contabilizzato fra le copie."""
+		self._importa(self._movimento(PAGAMENTO))
+		registro = frappe.get_doc("ACube Transaction Log", self._registro(self.id).name)
+		for copia in (self._movimento(COMMISSIONE), self._contabilizzato(PAGAMENTO)):
+			registro.append("receptions", {"reception_date": frappe.utils.now(), "raw_data": json.dumps(copia)})
+		registro.save(ignore_permissions=True)
+
+		versioni_acube_recuperate.recupera(registro.name)
+		versioni_acube_recuperate.recupera(registro.name)  # la seconda volta non aggiunge niente
+		importati = self._importa()
+		self.assertEqual(sorted(importati), [self.id, f"{self.id}:fee"])
+		self.assertEqual(importati[f"{self.id}:fee"].withdrawal, 0.65)
+		self.assertEqual(self._registro(f"{self.id}:fee").import_status, "Imported")
+		self.assertEqual(frappe.db.get_value("Bank Transaction", {"acube_transaction_id": self.id}, "acube_status"), "posted")
+
 	def test_revolut_due_pagamenti_uguali_restano_due(self):
 		"""Con un codice vero il confronto per contenuto non si fa: due pagamenti uguali dello stesso giorno restano due."""
 		secondo = self._movimento(PAGAMENTO)
@@ -139,8 +183,6 @@ class TestCommissioniRevolut(IntegrationTestCase):
 		self.assertEqual(len(self._importa(self._movimento(PAGAMENTO), secondo)), 2)
 
 	def test_la_patch_lascia_stare_i_movimenti_annullati(self):
-		from solede_openbanking.patches import commissioni_revolut
-
 		vivo = frappe.get_doc("Bank Transaction", self._importa(self._movimento(PAGAMENTO))[self.id].name)
 		vecchio = frappe.copy_doc(vivo)  # copia annullata di una prima importazione, con l'identificativo vecchio
 		vecchio.acube_transaction_id = vecchio.transaction_id = vecchio.reference_number = PAGAMENTO["transactionId"]
