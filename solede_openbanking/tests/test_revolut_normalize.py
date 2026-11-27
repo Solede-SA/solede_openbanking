@@ -1,6 +1,6 @@
 """Normalizzazione delle transazioni Revolut Business API (nessun accesso al DB).
 
-Casi emersi dagli estratti CHF giugno–settembre 2026: commissione di cambio compresa
+Casi emersi dagli estratti CHF giugno-settembre 2026: commissione di cambio compresa
 nel withdrawal (semantica ERPNext `included_fee` e «Total amount» del CSV), carte
 «pending» importate col segno in sospeso, verifiche carta a zero ignorate, cambio tra
 conti propri con una voce per leg.

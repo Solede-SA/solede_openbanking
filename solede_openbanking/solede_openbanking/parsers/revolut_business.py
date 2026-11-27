@@ -2,6 +2,7 @@
 # For license information, please see license.txt
 
 import csv
+from typing import ClassVar
 
 from .base import BankCSVParser, movement
 
@@ -9,7 +10,7 @@ from .base import BankCSVParser, movement
 class RevolutBusinessParser(BankCSVParser):
 	format_label = "Revolut Business"
 
-	REQUIRED_COLUMNS = {
+	REQUIRED_COLUMNS: ClassVar[set] = {
 		"Date completed (UTC)",
 		"ID",
 		"Type",

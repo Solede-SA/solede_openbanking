@@ -16,7 +16,7 @@ import hashlib
 import hmac
 import secrets
 import urllib.parse as _urlparse
-from typing import Iterator
+from collections.abc import Iterator
 
 import frappe
 import jwt
@@ -115,7 +115,7 @@ def _state_secret() -> bytes:
 
 def build_state_hmac(connection_name: str) -> str:
 	nonce = secrets.token_hex(_STATE_NONCE_BYTES)
-	mac = hmac.new(_state_secret(), f"{connection_name}|{nonce}".encode("utf-8"), hashlib.sha256).hexdigest()
+	mac = hmac.new(_state_secret(), f"{connection_name}|{nonce}".encode(), hashlib.sha256).hexdigest()
 	return f"{connection_name}|{nonce}|{mac}"
 
 
@@ -127,7 +127,7 @@ def verify_state_hmac(state: str) -> str:
 	connection_name, nonce, mac = parts
 	expected = hmac.new(
 		_state_secret(),
-		f"{connection_name}|{nonce}".encode("utf-8"),
+		f"{connection_name}|{nonce}".encode(),
 		hashlib.sha256,
 	).hexdigest()
 	if not hmac.compare_digest(expected, mac):
@@ -340,8 +340,7 @@ class RevolutAPIClient:
 			)
 			if not page:
 				return
-			for tx in page:
-				yield tx
+			yield from page
 			if len(page) < TX_PAGE_SIZE:
 				return
 			# pagina successiva: usa il created_at del più vecchio elemento (ultimo dell'array DESC)
